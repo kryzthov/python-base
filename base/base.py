@@ -298,6 +298,21 @@ def ShellCommandOutput(command):
   return output
 
 
+def MakeDir(path):
+  """Creates a directory if necessary.
+
+  Args:
+    path: Path of the directory to create.
+  Returns:
+    True if the directory was created, false if it already existed.
+  """
+  if os.path.exists(path):
+    return False
+  else:
+    os.makedirs(path)
+    return True
+
+
 # ------------------------------------------------------------------------------
 
 

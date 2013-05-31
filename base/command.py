@@ -174,6 +174,12 @@ class Command(object):
     assert (self._process is not None), 'Command has not been started.'
     return self._process.returncode
 
+  @property
+  def pid(self):
+    """Returns: the process ID running this command."""
+    assert (self._process is not None), 'Command has not been started.'
+    return self._process.pid
+
 
 if __name__ == '__main__':
   raise Error('%r cannot be used as a standalone script.' % args[0])
