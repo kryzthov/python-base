@@ -15,6 +15,9 @@ FLAGS = base.FLAGS
 LogLevel = base.LogLevel
 
 
+RULER = '-' * 80
+
+
 class Error(Exception):
   """Errors used in this module."""
   pass
@@ -23,6 +26,9 @@ class Error(Exception):
 class CommandError(Error):
   """Error while running a shell command."""
   pass
+
+
+# ------------------------------------------------------------------------------
 
 
 class Command(object):
@@ -66,29 +72,31 @@ class Command(object):
     log_dir = log_dir or FLAGS.log_dir
 
     name = os.path.basename(self._args[0])
-    timestamp = base.NowMS()
+    timestamp = base.Timestamp()
 
     self._input_path = '/dev/null'
     self._output_path = (
-        os.path.join(log_dir, '%s.%d.%d.out' % (name, timestamp, os.getpid())))
+        os.path.join(log_dir, '%s.%s.%d.out' % (name, timestamp, os.getpid())))
     self._error_path = (
-        os.path.join(log_dir, '%s.%d.%d.err' % (name, timestamp, os.getpid())))
+        os.path.join(log_dir, '%s.%s.%d.err' % (name, timestamp, os.getpid())))
 
     self._process = None
     self._output_bytes = None
     self._error_bytes = None
 
     if logging.getLogger().level <= LogLevel.DEBUG_VERBOSE:
-      logging.debug('Running command in %r:\n%s\nWith environment:\n%s' % (
+      logging.debug(
+          'Running command in %r:\n%s\nWith environment:\n%s',
           self._work_dir,
           ' \\\n\t'.join(map(repr, self._args)),
-          '\n'.join(map(lambda kv: '\t%r: %r' % kv, sorted(self._env.items())))
-      ))
+          '\n'.join(map(lambda kv: '\t%r: %r' % kv, sorted(self._env.items()))),
+      )
     else:
-      logging.debug('Running command in %r:\n%s' % (
+      logging.debug(
+          'Running command in %r:\n%s',
           self._work_dir,
           ' \\\n\t'.join(map(repr, self._args)),
-      ))
+      )
 
     if start:
       self.Start(wait_for=wait_for)
@@ -127,13 +135,42 @@ class Command(object):
     with open(self._error_path, 'rb') as f:
       self._error_bytes = f.read()
 
+    if logging.getLogger().level <= LogLevel.DEBUG_VERBOSE:
+      logging.debug(
+          ('Command exited with code: %d\n'
+           '%s\n'
+           'In directory %r\n'
+           'With environment:\n%s\n'
+           '%s\n'  # ruler
+           'Output:\n%s\n'
+           '%s\n'  # ruler
+           'Error:\n%s\n'
+           '%s\n'),  # ruler
+          self.exit_code,
+          ' \\\n\t'.join(map(repr, self._args)),
+          self._work_dir,
+          '\n'.join(map(lambda kv: '\t%r: %r' % kv, sorted(self._env.items()))),
+          RULER,
+          self.output_text,
+          RULER,
+          self.error_text,
+          RULER,
+      )
+
+    os.remove(self._output_path)
+    os.remove(self._error_path)
+
     if ((self._required_exit_code is not None)
         and (self.exit_code != self._required_exit_code)):
       raise CommandError(
-          'Exit code %d does not match required code %d for command:\n%s' % (
+          'Exit code %d does not match required code %d '
+          'for command in directory %s\n%s\nOutput:\n%s\nError:\n%s\n' % (
           self.exit_code,
           self._required_exit_code,
+          self._work_dir,
           ' \\\n\t'.join(self._args),
+          self.output_text,
+          self.error_text,
       ))
 
   @property

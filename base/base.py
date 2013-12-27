@@ -25,6 +25,7 @@ Template for a Python application:
 
 import collections
 import datetime
+import getpass
 import json
 import logging
 import os
@@ -33,6 +34,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 
@@ -52,6 +54,11 @@ def NowMS():
   return int(1000 * time.time())
 
 
+def NowNS():
+  """Returns: the current time, in ns since the Epoch."""
+  return int(1000000000 * time.time())
+
+
 def NowDateTime():
   """Returns: the current time as a date/time object (local timezone)."""
   return datetime.datetime.now()
@@ -66,16 +73,19 @@ def Timestamp():
   Returns:
     the current time as a human-readable timestamp.
   """
-  now = NowDateTime()
+  now_secs = time.time()  # in seconds since Epoch
+  now = time.localtime(now_secs)
+  now_subsecs = (now_secs - int(now_secs))
+  microsecs = int(now_subsecs * 1000000)
   return '%04d%02d%02d-%02d%02d%02d-%06d-%s' % (
-      now.year,
-      now.month,
-      now.day,
-      now.hour,
-      now.minute,
-      now.second,
-      now.microsecond,
-      time.tzname[0],
+      now.tm_year,
+      now.tm_mon,
+      now.tm_mday,
+      now.tm_hour,
+      now.tm_min,
+      now.tm_sec,
+      microsecs,
+      time.tzname[now.tm_isdst],
   )
 
 
@@ -174,7 +184,7 @@ def StripOptionalPrefix(string, prefix):
   Returns:
     The given string with the prefix removed, if applicable.
   """
-  if string.startswith(suffix):
+  if string.startswith(prefix):
     string = string[len(prefix):]
   return string
 
@@ -218,6 +228,38 @@ def StripMargin(text, separator='|'):
   lines = text.split('\n')
   lines = map(lambda line: line.split(separator, 1)[-1], lines)
   return '\n'.join(lines)
+
+
+def AddMargin(text, margin):
+  """Adds a left margin to a given text block.
+
+  Args:
+    text: Multi-line text block.
+    margin: Left margin to add at the beginning of each line.
+  Returns:
+    The specified text with the added left margin.
+  """
+  lines = text.split('\n')
+  lines = map(lambda line: margin + line, lines)
+  return '\n'.join(lines)
+
+
+def WrapText(text, ncolumns):
+  """Wraps a text block to fit in the specified number of columns.
+
+  Args:
+    text: Multi-line text block.
+    ncolumns: Maximum number of columns allowed for each line.
+  Returns:
+    The specified text block, where each line is ncolumns at most.
+  """
+  def ListWrappedLines():
+    for line in text.split('\n'):
+      while len(line) > ncolumns:
+        yield line[:ncolumns]
+        line = line[ncolumns:]
+      yield line
+  return '\n'.join(ListWrappedLines())
 
 
 def CamelCase(text, separator='_'):
@@ -309,7 +351,7 @@ def MakeDir(path):
   if os.path.exists(path):
     return False
   else:
-    os.makedirs(path)
+    os.makedirs(path, exist_ok=True)
     return True
 
 
@@ -326,7 +368,15 @@ class Flags(object):
     """Basic string flag parser."""
 
     def __init__(self, name, default=None, help=None):
-      self._name = name
+      """Constructs a specification for a string CLI flag.
+
+      Args:
+        name: Command-line flag name, eg. 'flag-name' or 'flag_name'.
+            Dashes are normalized to underscores.
+        default: Optional default value for the flag if unspecified.
+        help: Help message to include when displaying the usage text.
+      """
+      self._name = name.replace('-', '_')
       self._value = default
       self._default = default
       self._help = help
@@ -338,6 +388,10 @@ class Flags(object):
         argument: Command-line argument, as a string.
       """
       self._value = argument
+
+    @property
+    def type(self):
+      return 'string'
 
     @property
     def name(self):
@@ -356,10 +410,26 @@ class Flags(object):
       return self._help
 
   class IntegerFlag(StringFlag):
+    @property
+    def type(self):
+      return 'integer'
+
     def Parse(self, argument):
       self._value = int(argument)
 
+  class FloatFlag(StringFlag):
+    @property
+    def type(self):
+      return 'float'
+
+    def Parse(self, argument):
+      self._value = float(argument)
+
   class BooleanFlag(StringFlag):
+    @property
+    def type(self):
+      return 'boolean'
+
     def Parse(self, argument):
       if argument is None:
         self._value = True
@@ -387,6 +457,9 @@ class Flags(object):
   def AddBoolean(self, name, **kwargs):
     self.Add(Flags.BooleanFlag(name, **kwargs))
 
+  def AddFloat(self, name, **kwargs):
+    self.Add(Flags.FloatFlag(name, **kwargs))
+
   def Parse(self, args):
     """Parses the command-line arguments.
 
@@ -413,7 +486,7 @@ class Flags(object):
         unparsed.append(arg)
         continue
 
-      key = match.group(1)
+      key = match.group(1).replace('-', '_')
       value = match.group(2)
 
       if key not in self._defs:
@@ -435,9 +508,18 @@ class Flags(object):
     return self._unparsed
 
   def PrintUsage(self):
+    indent = 8
+    ncolumns = Terminal.columns
+
     print('Flags:')
     for (name, flag) in sorted(self._defs.items()):
-      print(' --%-30s\t%s\n    Default: %s\n' % (name, flag.help, flag.default))
+      flag_help = WrapText(text=flag.help, ncolumns=ncolumns - indent)
+      print(' --%s: %s = %r\n%s\n' % (
+          name,
+          flag.type,
+          flag.default,
+          AddMargin(StripMargin(flag_help), ' ' * indent),
+      ))
 
 
 FLAGS = Flags()
@@ -462,13 +544,24 @@ def MakeTuple(name, **kwargs):
   return tuple_class(**kwargs)
 
 
+# Shell exit codes:
+ExitCode = MakeTuple('ExitCode',
+  SUCCESS = os.EX_OK,
+  FAILURE = 1,
+  USAGE   = os.EX_USAGE,
+)
+
+
+# ------------------------------------------------------------------------------
+
+
 LogLevel = MakeTuple('LogLevel',
-  FATAL=50,
-  ERROR=40,
-  WARNING=30,
-  INFO=20,
-  DEBUG=10,
-  DEBUG_VERBOSE=5,
+  FATAL         = 50,
+  ERROR         = 40,
+  WARNING       = 30,
+  INFO          = 20,
+  DEBUG         = 10,
+  DEBUG_VERBOSE = 5,
 )
 
 
@@ -493,29 +586,85 @@ def ParseLogLevelFlag(level):
 
 
 FLAGS.AddString(
-    'log_level',
+    name='log_level',
     default='DEBUG_VERBOSE',
-    help=('Root logging level (integer or named level). '
+    help=('Root logging level (integer or named level).\n'
           'Overrides specific logging levels.'),
 )
 
 FLAGS.AddString(
-    'log_console_level',
+    name='log_console_level',
     default='INFO',
     help='Console specific logging level (integer or named level).',
 )
 
 FLAGS.AddString(
-    'log_file_level',
+    name='log_file_level',
     default='DEBUG_VERBOSE',
     help='Log-file specific logging level (integer or named level).',
 )
 
 FLAGS.AddString(
-    'log_dir',
+    name='log_dir',
     default=None,
     help='Directory where to write logs.',
 )
+
+
+# ------------------------------------------------------------------------------
+
+
+def Synchronized(lock=None):
+  """Decorator for synchronized functions.
+
+  Similar but not equivalent to Java synchronized methods.
+  """
+  if lock is None:
+    lock = threading.Lock()
+
+  def _Wrap(function):
+    def _SynchronizedWrapper(*args, **kwargs):
+      with lock:
+        return function(*args, **kwargs)
+    return _SynchronizedWrapper
+
+  return _Wrap
+
+
+# ------------------------------------------------------------------------------
+
+
+def Memoize():
+  """Returns a decorator to memoize the function it is applied to.
+
+  Memoization is incompatible with functions whose parameters are mutable.
+  This memoization implementation is fairly incomplete and primitive.
+  In particular, positional and keyword parameters are not normalized.
+  """
+  UNKNOWN = object()
+
+  def Decorator(function):
+    """Wraps a function and returns its memoized version.
+
+    Args:
+      function: Function to wrap with memoization.
+    Returns:
+      The memoized version of the specified function.
+    """
+    # Map: args tuple -> function(args)
+    memoize = dict()
+
+    def MemoizeWrapper(*args, **kwargs):
+      all_args = (args, tuple(sorted(kwargs.items())))
+      value = memoize.get(all_args, UNKNOWN)
+      if value is UNKNOWN:
+        value = function(*args, **kwargs)
+        memoize[all_args] = value
+      return value
+
+    return MemoizeWrapper
+
+  return Decorator
 
 
 # ------------------------------------------------------------------------------
@@ -587,6 +736,68 @@ Terminal = _Terminal()
 # ------------------------------------------------------------------------------
 
 
+RE_TEMPLATE_FIELD_LINE = re.compile(r'^(\w+):\s*(.*)\s*$')
+
+
+def ParseTemplate(template):
+  """Parses an issue template.
+
+  A template is a text file describing fields with lines such as:
+      'field_name: the field value'.
+  A field value may span several lines, until another 'field_name:' is found.
+  Lines starting with '#' are comments and are discarded.
+  Field values are stripped of their leading/trailing spaces and new lines.
+
+  Args:
+    template: Filled-in template text.
+  Yields:
+    Pairs (field name, field text).
+  """
+  field_name = None
+  field_value = []
+
+  for line in template.strip().split('\n') + ['end:']:
+    if line.startswith('#'): continue
+    match = RE_TEMPLATE_FIELD_LINE.match(line)
+    if match:
+      if field_name is not None:
+        yield (field_name, '\n'.join(field_value).strip())
+      elif len(field_value) > 0:
+        logging.warning('Ignoring lines: %r', field_value)
+
+      field_name = match.group(1)
+      field_value = [match.group(2)]
+    else:
+      field_value.append(line)
+
+
+def InputTemplate(template, fields):
+  """Queries the user for inputs through a template file.
+
+  Args:
+    template: Template with placeholders for the fields.
+        Specified as a Python format with named % markers.
+    fields: Dictionary with default values for the template.
+  Returns:
+    Fields dictionary as specified/modified by the user.
+  """
+  editor = os.environ.get('EDITOR', '/usr/bin/vim')
+  with tempfile.NamedTemporaryFile('w+t') as f:
+    f.write(template % fields)
+    f.flush()
+    user_command = '%s %s' % (editor, f.name)
+    if os.system(user_command) != 0:
+      raise Error('Error acquiring user input (command was %r).' % user_command)
+    with open(f.name, 'r') as f:
+      filled_template = f.read()
+
+  fields = dict(ParseTemplate(filled_template))
+  return fields
+
+
+# ------------------------------------------------------------------------------
+
+
 HttpMethod = MakeTuple('HttpMethod',
   GET = 'GET',
   POST = 'POST',
@@ -634,7 +845,18 @@ def Run(main):
     return os.EX_USAGE
 
   log_formatter = logging.Formatter(
-      '%(asctime)s %(levelname)s %(filename)s:%(lineno)s : %(message)s')
+      fmt='%(asctime)s %(levelname)s %(filename)s:%(lineno)s : %(message)s',
+  )
+  # Override the log date formatter to include the time zone:
+  def FormatTime(record, datefmt=None):
+    time_tuple = time.localtime(record.created)
+    tz_name = time.tzname[time_tuple.tm_isdst]
+    return '%(date_time)s-%(millis)03d-%(tz_name)s' % dict(
+        date_time=time.strftime('%Y%m%d-%H%M%S', time_tuple),
+        millis=record.msecs,
+        tz_name=tz_name,
+    )
+  log_formatter.formatTime = FormatTime
 
   logging.root.setLevel(log_root_level)
 
@@ -643,12 +865,14 @@ def Run(main):
   console_handler.setLevel(log_console_level)
   logging.root.addHandler(console_handler)
 
+  logging.addLevelName(LogLevel.DEBUG_VERBOSE, 'DEBUG_VERBOSE')
+
   # Initialize log dir:
   timestamp = Timestamp()
   pid = os.getpid()
 
   if FLAGS.log_dir is None:
-    tmp_dir = os.path.join('/tmp', program_name)
+    tmp_dir = os.path.join('/tmp', getpass.getuser(), program_name)
     if not os.path.exists(tmp_dir): os.makedirs(tmp_dir)
     FLAGS.log_dir = tempfile.mkdtemp(
         prefix='%s.%d.' % (timestamp, pid),
