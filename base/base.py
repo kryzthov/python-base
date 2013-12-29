@@ -356,6 +356,39 @@ def MakeDir(path):
     return True
 
 
+def Remove(path):
+  """Removes the file with the given path.
+
+  Does nothing if no file exists with the specified path.
+
+  Returns:
+    Whether the file was deleted.
+  """
+  try:
+    os.remove(path)
+    return True
+  except FileNotFoundError:
+    return False
+
+
+def Touch(path, atime=None, mtime=None):
+  """Equivalent of the shell command 'touch'.
+
+  Args:
+    path: Path of the file to touch.
+    atime: Access time, in seconds since the Epoch.
+    mtime: Modification time, in seconds since the Epoch.
+  """
+  assert ((atime is None) == (mtime is None))
+  if atime is None:
+    times = None
+  else:
+    times = (atime, mtime)
+  with open(path, 'ab+') as f:
+    # Note: there is a race condition here.
+    os.utime(path, times=times)
+
+
 def Exit():
   self_pid = os.getpid()
   logging.info('Forcibly terminating program (PID=%s)', self_pid)
