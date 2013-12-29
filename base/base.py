@@ -31,6 +31,7 @@ import logging
 import os
 import random
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -353,6 +354,55 @@ def MakeDir(path):
   else:
     os.makedirs(path, exist_ok=True)
     return True
+
+
+def Exit():
+  self_pid = os.getpid()
+  logging.info('Forcibly terminating program (PID=%s)', self_pid)
+  os.kill(self_pid, signal.SIGKILL)
+
+
+# ------------------------------------------------------------------------------
+
+
+class ImmutableDict(dict):
+  """Dictionary guaranteed immutable.
+
+  All mutations raise an exception.
+  Behaves exactly as a dict otherwise.
+  """
+
+  def __init__(self, items=None, **kwargs):
+    if items is not None:
+      super(ImmutableDict, self).__init__(items)
+      assert (len(kwargs) == 0)
+    else:
+      super(ImmutableDict, self).__init__(**kwargs)
+
+  def __setitem__(self, key, value):
+    raise Exception(
+        'Attempting to map key %r to value %r in ImmutableDict %r'
+        % (key, value, self))
+
+  def __delitem__(self, key):
+    raise Exception(
+        'Attempting to remove mapping for key %r in ImmutableDict %r'
+        % (key, self))
+
+  def clear(self):
+    raise Exception('Attempting to clear ImmutableDict %r' % self)
+
+  def update(self, items=None, **kwargs):
+    raise Exception(
+        'Attempting to update ImmutableDict %r with items=%r, kwargs=%r'
+        % (self, args, kwargs))
+
+  def pop(self, key, default=None):
+    raise Exception(
+        'Attempting to pop key %r from ImmutableDict %r' % (key, self))
+
+  def popitem(self):
+    raise Exception('Attempting to pop item from ImmutableDict %r' % self)
 
 
 # ------------------------------------------------------------------------------
@@ -894,4 +944,4 @@ def Run(main):
 
 
 if __name__ == '__main__':
-  raise Error('%r cannot be used as a standalone script.' % args[0])
+  raise Error('%r cannot be used as a standalone script.' % sys.argv[0])
