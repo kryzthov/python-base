@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 import time
 
 from base import base
@@ -26,6 +27,30 @@ class Error(Exception):
 class CommandError(Error):
   """Error while running a shell command."""
   pass
+
+
+# ------------------------------------------------------------------------------
+
+
+class CommandID(object):
+  """ID generator for shell-commands."""
+  _LOCK = threading.Lock()
+  _COUNTER = 0
+
+  @classmethod
+  def GetNewID(cls):
+    """Generates a new unique command ID.
+
+    Returns:
+      A new unique ID to identify a shell command.
+    """
+    cls._LOCK.acquire()
+    try:
+      command_id = cls._COUNTER
+      cls._COUNTER += 1
+      return command_id
+    finally:
+      cls._LOCK.release()
 
 
 # ------------------------------------------------------------------------------
@@ -65,6 +90,7 @@ class Command(object):
     Raises:
       CommandError: if the sub-process exit code does not match exit_code.
     """
+    self._command_id = CommandID.GetNewID()
     self._args = tuple(args)
     self._required_exit_code = exit_code
     self._work_dir = work_dir or os.getcwd()
@@ -86,14 +112,16 @@ class Command(object):
 
     if logging.getLogger().level <= LogLevel.DEBUG_VERBOSE:
       logging.debug(
-          'Running command in %r:\n%s\nWith environment:\n%s',
+          'Running command #%d in %r:\n%s\nWith environment:\n%s',
+          self._command_id,
           self._work_dir,
           ' \\\n\t'.join(map(repr, self._args)),
           '\n'.join(map(lambda kv: '\t%r: %r' % kv, sorted(self._env.items()))),
       )
     else:
       logging.debug(
-          'Running command in %r:\n%s',
+          'Running command #%d in %r:\n%s',
+          self._command_id,
           self._work_dir,
           ' \\\n\t'.join(map(repr, self._args)),
       )
@@ -137,7 +165,7 @@ class Command(object):
 
     if logging.getLogger().level <= LogLevel.DEBUG_VERBOSE:
       logging.debug(
-          ('Command exited with code: %d\n'
+          ('Command #%d exited with code: %d\n'
            '%s\n'
            'In directory %r\n'
            'With environment:\n%s\n'
@@ -146,6 +174,7 @@ class Command(object):
            '%s\n'  # ruler
            'Error:\n%s\n'
            '%s\n'),  # ruler
+          self._command_id,
           self.exit_code,
           ' \\\n\t'.join(map(repr, self._args)),
           self._work_dir,
