@@ -30,6 +30,7 @@ import copy
 import logging
 import os
 import queue
+import re
 import sys
 import threading
 import traceback
@@ -684,11 +685,15 @@ class Workflow(object):
   """)
 
   def DumpAsDot(self):
+    non_ident = re.compile(r'[^A-Za-z0-9_]')
+    def ToIdent(text):
+      return non_ident.sub('_', text)
+
     def MakeNode(task):
-      return '  %s;' % task.task_id
+      return '  %s;' % ToIdent(task.task_id)
 
     def MakeDep(dep):
-      return '  %s -> %s;' % (dep.after, dep.before)
+      return '  %s -> %s;' % (ToIdent(dep.after), ToIdent(dep.before))
 
     nodes = map(MakeNode, self._tasks.values())
     deps = map(MakeDep, self._deps)

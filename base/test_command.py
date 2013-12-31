@@ -23,6 +23,9 @@ class TestCommand(unittest.TestCase):
   def testExitCode(self):
     cmd = command.Command('false', exit_code=1)
 
+  def testArgsList(self):
+    cmd = command.Command(args=['false'], exit_code=1)
+
 
 def Main(args):
   args = list(args)

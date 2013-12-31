@@ -519,6 +519,8 @@ class Flags(object):
       else:
         self._value = Truth(argument)
 
+  # ----------------------------------------------------------------------------
+
   def __init__(self):
     # Map: flag name -> flag definition
     self._defs = {}
@@ -589,6 +591,14 @@ class Flags(object):
   def GetUnparsed(self):
     assert (self._unparsed is not None), 'Flags have not been parsed yet'
     return self._unparsed
+
+  def ListFlags(self):
+    """Lists the declared flags.
+
+    Yields:
+      Pair: (flag name, flag descriptor).
+    """
+    yield from self._defs.items()
 
   def PrintUsage(self):
     indent = 8

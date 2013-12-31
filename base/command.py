@@ -60,7 +60,8 @@ class Command(object):
   """Runs a shell command."""
 
   def __init__(
-    self, *args,
+    self, *arglist,
+    args=None,
     exit_code=None,
     work_dir=None,
     env=None,
@@ -77,8 +78,9 @@ class Command(object):
     properties once the process has completed.
 
     Args:
-      args: Command-line, as an array of command-line arguments.
+      *arglist: Command-line, as an array of command-line arguments.
         First argument is the path to the executable.
+      args: Keyword argument, alternative to *arglist.
       exit_code: Optional command exit code to require, or None.
       work_dir: Working directory. None means current workding directory.
       env: Optional environment variables for the subprocess, or None.
@@ -91,7 +93,11 @@ class Command(object):
       CommandError: if the sub-process exit code does not match exit_code.
     """
     self._command_id = CommandID.GetNewID()
-    self._args = tuple(args)
+    assert (args is None) ^ (len(arglist) == 0)
+    if args is None:
+      self._args = tuple(arglist)
+    else:
+      self._args = tuple(args)
     self._required_exit_code = exit_code
     self._work_dir = work_dir or os.getcwd()
     self._env = env or os.environ
