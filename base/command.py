@@ -117,7 +117,7 @@ class Command(object):
     self._error_bytes = None
 
     if logging.getLogger().level <= LogLevel.DEBUG_VERBOSE:
-      logging.debug(
+      logging.log(LogLevel.DEBUG_VERBOSE,
           'Running command #%d in %r:\n%s\nWith environment:\n%s',
           self._command_id,
           self._work_dir,
@@ -170,7 +170,7 @@ class Command(object):
       self._error_bytes = f.read()
 
     if logging.getLogger().level <= LogLevel.DEBUG_VERBOSE:
-      logging.debug(
+      logging.log(LogLevel.DEBUG_VERBOSE,
           ('Command #%d exited with code: %d\n'
            '%s\n'
            'In directory %r\n'
@@ -191,6 +191,14 @@ class Command(object):
           self.error_text,
           RULER,
       )
+    else:
+      logging.debug(
+          ('Command #%d exited with code: %d\n'
+           ' - output: %r\n'
+           ' - error:  %r'),
+          self._command_id, self.exit_code,
+          self.output_text,
+          self.error_text)
 
     os.remove(self._output_path)
     os.remove(self._error_path)

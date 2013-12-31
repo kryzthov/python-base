@@ -655,6 +655,7 @@ LogLevel = MakeTuple('LogLevel',
   INFO          = 20,
   DEBUG         = 10,
   DEBUG_VERBOSE = 5,
+  ALL           = 0,
 )
 
 
@@ -680,21 +681,21 @@ def ParseLogLevelFlag(level):
 
 FLAGS.AddString(
     name='log_level',
-    default='DEBUG_VERBOSE',
-    help=('Root logging level (integer or named level).\n'
+    default='DEBUG',
+    help=('Master log level (integer or level name).\n'
           'Overrides specific logging levels.'),
 )
 
 FLAGS.AddString(
     name='log_console_level',
     default='INFO',
-    help='Console specific logging level (integer or named level).',
+    help='Filter log statements sent to the console (integer or level name).',
 )
 
 FLAGS.AddString(
     name='log_file_level',
-    default='DEBUG_VERBOSE',
-    help='Log-file specific logging level (integer or named level).',
+    default='ALL',
+    help='Filter log statements sent to the log file (integer or level name).',
 )
 
 FLAGS.AddString(
@@ -959,6 +960,7 @@ def Run(main):
   logging.root.addHandler(console_handler)
 
   logging.addLevelName(LogLevel.DEBUG_VERBOSE, 'DEBUG_VERBOSE')
+  logging.addLevelName(LogLevel.ALL, 'ALL')
 
   # Initialize log dir:
   timestamp = Timestamp()
