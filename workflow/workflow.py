@@ -309,6 +309,8 @@ class Worker(object):
         logging.debug('Shutting down worker %s.', self)
         return
 
+      logging.info('Worker %s running task %s', self._worker_id, task.task_id)
+
       # Task exceptions should not kill the worker:
       try:
         task._Run()
@@ -742,6 +744,9 @@ class LocalFSPersistentTask(Task):
     if status == TaskState.SUCCESS:
       base.Touch(self._output_file_path)
     return status
+
+
+# ------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':
