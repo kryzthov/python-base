@@ -600,11 +600,11 @@ class Flags(object):
     """
     yield from self._defs.items()
 
-  def PrintUsage(self):
+  def PrintUsage(self, header='Flags:'):
     indent = 8
     ncolumns = Terminal.columns
 
-    print('Flags:')
+    print(header)
     for (name, flag) in sorted(self._defs.items()):
       flag_help = WrapText(text=flag.help, ncolumns=ncolumns - indent)
       print(' --%s: %s = %r\n%s\n' % (

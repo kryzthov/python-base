@@ -74,6 +74,7 @@ class Action(object, metaclass=abc.ABCMeta):
       }))
       print()
       self.flags.PrintUsage()
+      base.FLAGS.PrintUsage(header='Global flags:')
       return os.EX_OK
 
     return self.Run(self._flags.GetUnparsed())
