@@ -27,15 +27,18 @@ Usage:
 import abc
 import collections
 import copy
+import http.server
 import logging
 import os
 import queue
 import re
 import sys
+import tempfile
 import threading
 import traceback
 
 from base import base
+from base import command
 
 
 FLAGS = base.FLAGS
@@ -380,6 +383,11 @@ class Workflow(object):
     return self._tasks
 
   @property
+  def deps(self):
+    """Returns: the set of dependencies, as Dependency directed edges."""
+    return self._deps
+
+  @property
   def started(self):
     """Returns: whether the workflow is started."""
     return self._started
@@ -679,26 +687,57 @@ class Workflow(object):
     if len(self._running) > 0: return
     self._done.set()
 
+  # Template to dump this workflow as a Graphiv/Dot definition:
   _DOT_TEMPLATE = base.StripMargin("""\
   |digraph Workflow {
   |%(nodes)s
   |%(deps)s
-  |}
-  """)
+  |}""")
 
   def DumpAsDot(self):
-    non_ident = re.compile(r'[^A-Za-z0-9_]')
-    def ToIdent(text):
-      return non_ident.sub('_', text)
+    """Dumps this workflow as a Graphviz/Dot definition.
 
+    Returns:
+      A Graphviz/Dot definition for this workflow.
+    """
     def MakeNode(task):
-      return '  %s;' % ToIdent(task.task_id)
+      return ('  %s;' % base.MakeIdent(task.task_id))
 
     def MakeDep(dep):
-      return '  %s -> %s;' % (ToIdent(dep.after), ToIdent(dep.before))
+      return ('  %s -> %s;' %
+              (base.MakeIdent(dep.after), base.MakeIdent(dep.before)))
 
-    nodes = map(MakeNode, self._tasks.values())
-    deps = map(MakeDep, self._deps)
+    nodes = sorted(map(MakeNode, self._tasks.values()))
+    deps = sorted(map(MakeDep, self._deps))
+    return self._DOT_TEMPLATE % dict(
+      nodes='\n'.join(nodes),
+      deps='\n'.join(deps),
+    )
+
+  def DumpRunStateAsDot(self):
+    """Dumps this workflow as a Graphviz/Dot definition.
+
+    Returns:
+      A Graphviz/Dot definition for this workflow.
+    """
+    def MakeNode(task):
+      task_id = task.task_id
+      if task.state == TaskState.FAILURE:
+        color = 'red'
+      elif task.state == TaskState.SUCCESS:
+        color = 'blue'
+      elif task in self._running:
+        color = 'green'
+      else:
+        color = 'black'
+      return ('  %s [color="%s"];' % (base.MakeIdent(task_id), color))
+
+    def MakeDep(dep):
+      return ('  %s -> %s;' %
+              (base.MakeIdent(dep.after), base.MakeIdent(dep.before)))
+
+    nodes = sorted(map(MakeNode, self._tasks.values()))
+    deps = sorted(map(MakeDep, self._deps))
     return self._DOT_TEMPLATE % dict(
       nodes='\n'.join(nodes),
       deps='\n'.join(deps),
@@ -715,6 +754,18 @@ class Workflow(object):
     logging.debug(
         'Running:%s',
         ''.join(map(lambda task: '\n\t%s' % task, self._running)))
+
+  def DumpAsSVG(self):
+    dot_source = self.DumpRunStateAsDot()
+    with tempfile.NamedTemporaryFile(suffix='.dot') as dot_file:
+      with tempfile.NamedTemporaryFile(suffix='.svg') as svg_file:
+        dot_file.write(dot_source.encode())
+        dot_file.flush()
+        cmd = command.Command(
+            args=['dot', '-Tsvg', '-o%s' % svg_file.name, dot_file.name],
+            exit_code=0,
+        )
+        return svg_file.read().decode()
 
 
 # ------------------------------------------------------------------------------
@@ -744,6 +795,118 @@ class LocalFSPersistentTask(Task):
     if status == TaskState.SUCCESS:
       base.Touch(self._output_file_path)
     return status
+
+
+# ------------------------------------------------------------------------------
+
+
+def _MakeWorkflowMonitoringHandlerClass(monitor):
+  class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+      flow = monitor.workflow
+      if flow is None:
+        self.send_response(404)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write('No workflow assigned'.encode())
+      else:
+        self.send_response(200)
+        self.send_header('Content-type', 'image/svg+xml')
+        self.end_headers()
+        self.wfile.write(flow.DumpAsSVG().encode())
+
+      self.wfile.flush()
+
+  return HTTPRequestHandler
+
+
+class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
+  """Simple HTTP server to monitor a workflow."""
+
+  def __init__(self, interface='0.0.0.0', port=8000, workflow=None):
+    super(WorkflowHTTPMonitor, self).__init__(
+      server_address=(interface, port),
+      RequestHandlerClass=_MakeWorkflowMonitoringHandlerClass(self),
+    )
+    self._interface = interface
+    self._thread = threading.Thread(target=self._ServeThread)
+    self._workflow = workflow
+
+  @property
+  def workflow(self):
+    return self._workflow
+
+  def SetWorkflow(self, workflow):
+    self._workflow = workflow
+
+  def Start(self):
+    self._thread.start()
+    logging.info(
+        'Workflow monitor started on http://%s:%s',
+        self._interface, self.server_port)
+
+  def Stop(self):
+    self.shutdown()
+    self._thread.join()
+    self.server_close()
+
+  def _ServeThread(self):
+    self.serve_forever()
+
+
+# ------------------------------------------------------------------------------
+
+
+def DiffWorkflow(flow1, flow2):
+  """Visualize the differences between two workflows.
+
+  Requires graphviz's frontend "xdot" program to be installed.
+
+  Args:
+    flow1, flow2: visualize the differences between these workflows.
+  """
+  nodes = frozenset.union(
+      frozenset(flow1.tasks.keys()),
+      frozenset(flow2.tasks.keys()))
+  deps = frozenset.union(flow1.deps, flow2.deps)
+
+  def MakeNode(task_id):
+    if task_id not in flow1.tasks:
+      color = 'blue'
+    elif task_id not in flow2.tasks:
+      color = 'red'
+    else:
+      color = 'black'
+    return '  %s [color="%s"];' % (base.MakeIdent(task_id), color)
+
+  def MakeDep(dep):
+    if dep not in flow1.deps:
+      color = 'blue'
+    elif dep not in flow2.deps:
+      color = 'red'
+    else:
+      color = 'black'
+    return '  %s -> %s [color="%s"];' \
+        % (base.MakeIdent(dep.after), base.MakeIdent(dep.before), color)
+
+  _DOT_TEMPLATE = base.StripMargin("""\
+  |digraph Workflow {
+  |%(nodes)s
+  |%(deps)s
+  |}""")
+
+
+  nodes = sorted(map(MakeNode, nodes))
+  deps = sorted(map(MakeDep, deps))
+  dot_source = _DOT_TEMPLATE % dict(
+    nodes='\n'.join(nodes),
+    deps='\n'.join(deps),
+  )
+
+  with tempfile.NamedTemporaryFile(prefix='wfdiff.', suffix='.dot') as f:
+    f.write(dot_source.encode())
+    f.flush()
+    os.system('xdot %s' % f.name)
 
 
 # ------------------------------------------------------------------------------

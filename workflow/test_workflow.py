@@ -4,7 +4,10 @@
 
 """Unit-tests for Workflow and Task."""
 
+import http.client
+import logging
 import os
+import re
 import sys
 import unittest
 
@@ -175,6 +178,69 @@ class TestWorkflow(unittest.TestCase):
       self.assertTrue(os.path.exists(file_path))
     finally:
       base.Remove(file_path)
+
+  def testDumpAsSVG(self):
+    flow1 = workflow.Workflow()
+    task1 = SuccessTask(workflow=flow1, task_id='task1')
+    task2 = FailureTask(workflow=flow1, task_id='task2')
+    task3 = SuccessTask(workflow=flow1, task_id='task3')
+    task2.RunsAfter(task1)
+    task3.RunsAfter(task2)
+    flow1.Build()
+
+    svg_source = flow1.DumpAsSVG()
+    logging.debug('SVG source:\n%s', svg_source)
+
+    server = workflow.WorkflowHTTPMonitor(interface='127.0.0.1', port=0)
+    server.Start()
+    try:
+      flow1.Process()
+
+      conn = http.client.HTTPConnection(
+          host='127.0.0.1',
+          port=server.server_port,
+      )
+      conn.connect()
+      try:
+        conn.request(method='GET', url='')
+        response = conn.getresponse()
+        self.assertEqual(404, response.getcode())
+
+        server.SetWorkflow(flow1)
+
+        conn.request(method='GET', url='')
+        response = conn.getresponse()
+        self.assertEqual(200, response.getcode())
+        self.assertEqual('image/svg+xml', response.getheader('Content-Type'))
+        logging.debug('HTTP response: %r', response.read())
+      finally:
+        conn.close()
+
+    finally:
+      server.Stop()
+
+  def disabledTestWorkflowDiff(self):
+    flow1 = workflow.Workflow()
+    task1 = SuccessTask(workflow=flow1, task_id='task1')
+    task2 = SuccessTask(workflow=flow1, task_id='task2')
+    task3 = SuccessTask(workflow=flow1, task_id='task3')
+    task2.RunsAfter(task1)
+    task3.RunsAfter(task2)
+    flow1.Build()
+
+    flow2 = workflow.Workflow()
+    task1 = SuccessTask(workflow=flow2, task_id='task1')
+    task2b = SuccessTask(workflow=flow2, task_id='task2b')
+    task3 = SuccessTask(workflow=flow2, task_id='task3')
+    task2b.RunsAfter(task1)
+    task3.RunsAfter(task2b)
+    task3.RunsAfter(task1)
+    flow2.Build()
+
+    workflow.DiffWorkflow(flow1, flow2)
+
+
+# ------------------------------------------------------------------------------
 
 
 def Main(args):
