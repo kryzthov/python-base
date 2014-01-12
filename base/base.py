@@ -26,12 +26,14 @@ Template for a Python application:
 import collections
 import datetime
 import getpass
+import http.server
 import json
 import logging
 import os
 import random
 import re
 import signal
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -48,6 +50,10 @@ Default = object()
 class Error(Exception):
   """Errors used in this module."""
   pass
+
+
+# ------------------------------------------------------------------------------
+# Time utilities
 
 
 def NowMS():
@@ -90,6 +96,10 @@ def Timestamp():
   )
 
 
+# ------------------------------------------------------------------------------
+# JSON utilities
+
+
 JSON_DECODER = json.JSONDecoder()
 JSON_ENCODER = json.JSONEncoder(
   indent=2,
@@ -117,6 +127,10 @@ def JsonEncode(py_value):
     The specified Python value encoded as a JSON string.
   """
   return JSON_ENCODER.encode(py_value)
+
+
+# ------------------------------------------------------------------------------
+# Text utilities
 
 
 def Truth(text):
@@ -312,9 +326,38 @@ def UnCamelCase(text, separator='_'):
 
 
 def Truncate(text, width, ellipsis='..'):
+  """Truncates a text to the specified number of characters.
+
+  Args:
+    text: Text to truncate.
+    width: Number of characters allowed.
+    ellipsis: Optional ellipsis text to append, if truncation occurs.
+  Returns:
+    The given text, truncated to at most width characters.
+    If truncation occurs, the truncated text ends with the ellipsis.
+  """
   if len(text) > width:
     text = text[:(width - len(ellipsis))] + ellipsis
   return text
+
+
+_RE_NO_IDENT_CHARS = re.compile(r'[^A-Za-z0-9_]+')
+
+
+def MakeIdent(text, sep='_'):
+  """Makes an identifier out of a random text.
+
+  Args:
+    text: Text to create an identifier from.
+    sep: Separator used to replace non-identifier characters.
+  Returns:
+    An identifier made after the specified text.
+  """
+  return _RE_NO_IDENT_CHARS.sub(sep, text)
+
+
+# ------------------------------------------------------------------------------
+
 
 def GetProgramName():
   """Returns: this program's name."""
@@ -340,6 +383,17 @@ def ShellCommandOutput(command):
       'Shell command failed: %r : %s' % (command, output))
   return output
 
+
+class MultiThreadedHTTPServer(
+    socketserver.ThreadingMixIn,
+    http.server.HTTPServer,
+):
+  """Multi-threaded HTTP server."""
+  pass
+
+
+# ------------------------------------------------------------------------------
+# Files utilities
 
 def MakeDir(path):
   """Creates a directory if necessary.
