@@ -468,6 +468,8 @@ class Workflow(object):
     self._deps = frozenset(self._deps)
 
     for dep in self._deps:
+      logging.debug('Applying dependency: %r', dep)
+
       # dep.before must run before dep.after:
       self._tasks[dep.before].RunsBefore(dep.after)
 
