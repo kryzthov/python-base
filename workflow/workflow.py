@@ -809,11 +809,21 @@ def _MakeWorkflowMonitoringHandlerClass(monitor):
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write('No workflow assigned'.encode())
-      else:
+      elif monitor.mode == 'svg':
         self.send_response(200)
         self.send_header('Content-type', 'image/svg+xml')
         self.end_headers()
         self.wfile.write(flow.DumpAsSVG().encode())
+      elif monitor.mode == 'dot':
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(flow.DumpRunStateAsDot().encode())
+      else:
+        self.send_response(404)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(('Invalid rendering mode: %r' % monitor.mode).encode())
 
       self.wfile.flush()
 
@@ -823,18 +833,39 @@ def _MakeWorkflowMonitoringHandlerClass(monitor):
 class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
   """Simple HTTP server to monitor a workflow."""
 
-  def __init__(self, interface='0.0.0.0', port=8000, workflow=None):
+  def __init__(
+      self,
+      interface='0.0.0.0',
+      port=8000,
+      workflow=None,
+      mode='svg',
+  ):
+    """Creates a new HTTP endpoint to monitor a workflow.
+
+    Args:
+      interface: TCP interface to listen on.
+      port: TCP port to listen on.
+      workflow: Optional workflow to monitor.
+          Can be set or updated later with SetWorkflow().
+      mode: Rendering mode (either 'dot' or 'svg').
+    """
     super(WorkflowHTTPMonitor, self).__init__(
-      server_address=(interface, port),
-      RequestHandlerClass=_MakeWorkflowMonitoringHandlerClass(self),
+        server_address=(interface, port),
+        RequestHandlerClass=_MakeWorkflowMonitoringHandlerClass(self),
     )
     self._interface = interface
     self._thread = threading.Thread(target=self._ServeThread)
     self._workflow = workflow
+    assert (mode in ('svg', 'dot'))
+    self._mode = mode
 
   @property
   def workflow(self):
     return self._workflow
+
+  @property
+  def mode(self):
+    return self._mode
 
   def SetWorkflow(self, workflow):
     self._workflow = workflow
