@@ -789,11 +789,11 @@ class Workflow(object):
         npending = len(pending),
         nsuccesses = len(successes),
         nfailures = len(failures),
-        running = '\n'.join(map(lambda s: ' - %s' % s, running)),
-        runnable = '\n'.join(map(lambda s: ' - %s' % s, runnable)),
-        pending = '\n'.join(map(lambda s: ' - %s' % s, pending)),
-        successes = '\n'.join(map(lambda s: ' - %s' % s, successes)),
-        failures = '\n'.join(map(lambda s: ' - %s' % s, failures)),
+        running = '\n'.join(map(lambda s: ' - %s' % s, sorted(running))),
+        runnable = '\n'.join(map(lambda s: ' - %s' % s, sorted(runnable))),
+        pending = '\n'.join(map(lambda s: ' - %s' % s, sorted(pending))),
+        successes = '\n'.join(map(lambda s: ' - %s' % s, sorted(successes))),
+        failures = '\n'.join(map(lambda s: ' - %s' % s, sorted(failures))),
     )
 
   def _Dump(self):
