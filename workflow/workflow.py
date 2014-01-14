@@ -745,6 +745,57 @@ class Workflow(object):
       deps='\n'.join(deps),
     )
 
+  def DumpStateAsTable(self):
+    """Dumps the running state of this workflow as an HTML table.
+
+    Returns:
+      The running state of this workflow as an HTML table.
+    """
+    def TaskIDGetter(task):
+      return task.task_id
+
+    with self._lock:
+      successes = frozenset(map(TaskIDGetter, self._success))
+      failures = frozenset(map(TaskIDGetter, self._failure))
+      pending = frozenset(map(TaskIDGetter, self._pending))
+      running = frozenset(map(TaskIDGetter, self._running))
+      runnable = frozenset(map(TaskIDGetter, self._runnable))
+
+    return base.StripMargin("""\
+    |Running: %(nrunning)s
+    |Runnable: %(nrunnable)s
+    |Pending: %(npending)s
+    |Successful: %(nsuccesses)s
+    |Failed: %(nfailures)s
+    |%(ruler)s
+    |Running tasks:
+    |%(running)s
+    |%(ruler)s
+    |Runnable tasks:
+    |%(runnable)s
+    |%(ruler)s
+    |Pending tasks:
+    |%(pending)s
+    |%(ruler)s
+    |Successful tasks:
+    |%(successes)s
+    |%(ruler)s
+    |Failed tasks:
+    |%(failures)s
+    """) % dict(
+        ruler = '-' * 80,
+        nrunning = len(running),
+        nrunnable = len(runnable),
+        npending = len(pending),
+        nsuccesses = len(successes),
+        nfailures = len(failures),
+        running = '\n'.join(map(lambda s: ' - %s' % s, running)),
+        runnable = '\n'.join(map(lambda s: ' - %s' % s, runnable)),
+        pending = '\n'.join(map(lambda s: ' - %s' % s, pending)),
+        successes = '\n'.join(map(lambda s: ' - %s' % s, successes)),
+        failures = '\n'.join(map(lambda s: ' - %s' % s, failures)),
+    )
+
   def _Dump(self):
     if (logging.getLogger().level > LogLevel.DEBUG_VERBOSE): return
     logging.debug(
@@ -821,6 +872,11 @@ def _MakeWorkflowMonitoringHandlerClass(monitor):
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(flow.DumpRunStateAsDot().encode())
+      elif monitor.mode == 'table':
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(flow.DumpStateAsTable().encode())
       else:
         self.send_response(404)
         self.send_header('Content-type', 'text/plain')
@@ -858,7 +914,7 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
     self._interface = interface
     self._thread = threading.Thread(target=self._ServeThread)
     self._workflow = workflow
-    assert (mode in ('svg', 'dot'))
+    assert (mode in ('svg', 'dot', 'table'))
     self._mode = mode
 
   @property

@@ -9,10 +9,17 @@ import logging
 import os
 import re
 import sys
+import time
 import unittest
 
 from base import base
 from workflow import workflow
+
+
+class SlowTask(workflow.Task):
+  def Run(self):
+    time.sleep(10.0)
+    return self.SUCCESS
 
 
 class SuccessTask(workflow.Task):
@@ -212,6 +219,45 @@ class TestWorkflow(unittest.TestCase):
         response = conn.getresponse()
         self.assertEqual(200, response.getcode())
         self.assertEqual('image/svg+xml', response.getheader('Content-Type'))
+        logging.debug('HTTP response: %r', response.read())
+      finally:
+        conn.close()
+
+    finally:
+      server.Stop()
+
+  def testDumpStateAsTable(self):
+    flow1 = workflow.Workflow()
+    task1 = SlowTask(workflow=flow1, task_id='task1')
+    task2 = SlowTask(workflow=flow1, task_id='task2')
+    task3 = SlowTask(workflow=flow1, task_id='task3')
+    task2.RunsAfter(task1)
+    task3.RunsAfter(task2)
+    flow1.Build()
+
+    svg_source = flow1.DumpStateAsTable()
+    logging.debug('Workflow table:\n%s', svg_source)
+
+    server = workflow.WorkflowHTTPMonitor(
+        interface='127.0.0.1',
+        port=0,
+        mode='table',
+    )
+    server.Start()
+    server.SetWorkflow(flow1)
+    try:
+      flow1.Process()
+
+      conn = http.client.HTTPConnection(
+          host='127.0.0.1',
+          port=server.server_port,
+      )
+      conn.connect()
+      try:
+        conn.request(method='GET', url='')
+        response = conn.getresponse()
+        self.assertEqual(200, response.getcode())
+        self.assertEqual('text/plain', response.getheader('Content-Type'))
         logging.debug('HTTP response: %r', response.read())
       finally:
         conn.close()
