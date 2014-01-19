@@ -41,10 +41,19 @@ import threading
 import time
 
 
-# Constant to be used in place of None for default parameter values.
-# Useful when None is a valid parameter value and cannot be used
-# to mean "use the default".
-Default = object()
+class Default(object):
+  """Singleton used to in place of None for default parameter values.
+
+  Useful when None is a valid parameter value and cannot be used
+  to mean "use the default".
+  """
+  pass
+Default = Default()
+
+class Undefined(object):
+  """Singleton used in place of None to represent a missing dictionary entry."""
+  pass
+Undefined = Undefined()
 
 
 class Error(Exception):
