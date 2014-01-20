@@ -39,11 +39,13 @@ import traceback
 
 from base import base
 from base import command
+from base import record
 
 
 FLAGS = base.FLAGS
 LogLevel = base.LogLevel
 Default = base.Default
+Undefined = base.Undefined
 
 
 class Error(Exception):
@@ -88,6 +90,15 @@ class Task(object, metaclass=abc.ABCMeta):
 
   FAILURE = TaskState.FAILURE
   SUCCESS = TaskState.SUCCESS
+
+  @classmethod
+  def TaskName(cls):
+    """Returns: the name of this task."""
+    if cls.__module__ == '__main__':
+      return cls.__name__
+    else:
+      return '%s.%s' % (cls.__module__, cls.__name__)
+
 
   def __init__(
       self,
@@ -848,6 +859,181 @@ class LocalFSPersistentTask(Task):
     if status == TaskState.SUCCESS:
       base.Touch(self._output_file_path)
     return status
+
+
+# ------------------------------------------------------------------------------
+
+
+class IOTask(Task):
+  """Base class for tasks with inputs and outputs."""
+
+  def __init__(
+      self,
+      write_output_trace=True,
+      ignore_saved_output_trace=False,
+      **kwargs
+  ):
+    """Initializes a new IOTask instance.
+
+    Notes:
+    By default, trace files are written in the current working directory.
+    Sub-classes may want to override _GetTraceFilePath() to customize this.
+
+    Args:
+      write_output_trace: Whether to write an output trace file.
+          True by default.
+      ignore_saved_output_trace: When set, ignore saved output trace files.
+          This causes the task to always run, even when a successful previous
+          run exists.
+      **kwargs: Other arguments proxied to Task.__init__().
+    """
+    super(IOTask, self).__init__(**kwargs)
+
+    self._write_output_trace = write_output_trace
+    self._ignore_saved_output_trace = ignore_saved_output_trace
+
+    self._input = Undefined
+    self._output = Undefined
+
+    # Map: input name -> task ID whose output will be passed as input
+    self._input_map = dict()
+
+  @property
+  def input(self):
+    """Returns: this task's input.
+
+    Undefined until the task run begins.
+    """
+    return self._input
+
+  @property
+  def output(self):
+    """Returns: this task's output.
+
+    Undefined until after successful task run completion.
+    """
+    return self._output
+
+  def BindInputToTaskOutput(self, input_name, task):
+    """Binds an input of this task to the output of another task.
+
+    Implies that this task runs after the given dependency.
+
+    Args:
+      input_name: Name of the input to bind.
+      task: Task or ID of the task to bind the output of.
+    """
+    assert (input_name != 'output')  # Reserved for output
+    assert (input_name not in self._input_map)
+    task = GetTaskID(task)
+    self._input_map[input_name] = task
+    self.RunsAfter(task)
+
+  def GetTaskRunID(self):
+    """Uniquely identifies a task run based on the task run-time inputs.
+
+    Task run IDs are used to create trace files for task runs.
+
+    By default, task is unique based on its sole ID,
+    ie. run-time inputs (self.input.*) are ignored.
+    """
+    return self.task_id
+
+  @abc.abstractmethod
+  def RunWithIO(self, output, **inputs):
+    """Placeholder for users to implement the task's logic.
+
+    Args:
+      output: Output record for the task to populate.
+          On successful completion of the run, a trace file is written
+          with this output.
+      **inputs: The requested inputs, bound to the dependencies outputs.
+    Returns:
+      A task run must return either TaskState.SUCCESS or TaskState.FAILURE.
+    Raises:
+      Tasks must catch exceptions and convert them explicitly into failures.
+      Uncaught exceptions will cause the entire workflow to stop.
+    """
+    raise Exception('Abstract method')
+
+  def Run(self):
+    """Wires tasks outputs and inputs.
+
+    Sub-classes should NOT override this method, but should instead implement
+    RunWithIO(output, **inputs).
+
+    Returns:
+      The task run completion state.
+    """
+    # Load task inputs:
+    self._input = record.Record()
+    input_map = dict()
+    for input_name, dep_id in self._input_map.items():
+      dep = self.workflow.tasks[dep_id]
+      self._input[input_name] = dep.output
+      input_map[input_name] = dep.output
+
+    # Run task, if necessary:
+    task_run_id = self.GetTaskRunID()
+    logging.info('Processing task run ID: %r', task_run_id)
+
+    output = self._ReadTaskRunTrace(task_run_id)
+    if output is None:
+      output = record.Record()
+      task_state = self.RunWithIO(output=output, **input_map)
+
+      # Store task output:
+      if task_state == TaskState.SUCCESS:
+        self._WriteTaskRunTrace(task_run_id, output)
+    else:
+      logging.info('Trace found for task run ID: %r', task_run_id)
+      task_state = TaskState.SUCCESS
+
+    self._output = output
+
+    return task_state
+
+  def _ReadTaskRunTrace(self, task_run_id):
+    """Looks for an existing trace for a given task run.
+
+    Args:
+      task_run_id: ID of the task run to search for.
+    Returns:
+      The task output record persisted for the specified task run,
+      or None if no trace is found for the specified task run.
+    """
+    if self._ignore_saved_output_trace:
+      return None
+
+    trace_file_path = self._GetTraceFilePath(task_run_id)
+    if os.path.exists(trace_file_path):
+      return record.LoadFromFile(trace_file_path)
+    else:
+      return None
+
+  def _WriteTaskRunTrace(self, task_run_id, output):
+    """Persists a successful task run.
+
+    Args:
+      task_run_id: ID of the task run.
+      output: Task output record.
+    """
+    if self._write_output_trace:
+      trace_file_path = self._GetTraceFilePath(task_run_id)
+      logging.debug(
+          'Writing trace for task run ID: %r in path %r',
+          task_run_id, trace_file_path)
+      output.WriteToFile(file_path=trace_file_path)
+
+  def _GetTraceFilePath(self, task_run_id):
+    """Returns: path of a trace file for the given task run ID.
+
+    Args:
+      task_run_id: ID of the task run.
+    Returns:
+      Path of a trace file for the given task run ID.
+    """
+    return task_run_id
 
 
 # ------------------------------------------------------------------------------
