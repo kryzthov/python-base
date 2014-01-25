@@ -669,7 +669,10 @@ class Flags(object):
 
     print(header)
     for (name, flag) in sorted(self._defs.items()):
-      flag_help = WrapText(text=flag.help, ncolumns=ncolumns - indent)
+      if flag.help is not None:
+        flag_help = WrapText(text=flag.help, ncolumns=ncolumns - indent)
+      else:
+        flag_help = 'Undocumented'
       print(' --%s: %s = %r\n%s\n' % (
           name,
           flag.type,
