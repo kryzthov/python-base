@@ -9,6 +9,13 @@ import os
 from base import base
 
 
+HelpFlag = base.MakeTuple('HelpFlag',
+  ADD_HANDLE = 0,
+  ADD_NO_HANDLE = 1,
+  NO_ADD = 2,
+)
+
+
 class Action(object, metaclass=abc.ABCMeta):
   """Abstract base class for CLI actions."""
 
@@ -22,17 +29,30 @@ class Action(object, metaclass=abc.ABCMeta):
     |  %(this)s <flags> ...
     """
 
-  def __init__(self):
+  def __init__(
+      self,
+      parent_flags=None,
+      help_flag=HelpFlag.ADD_HANDLE,
+  ):
     """Initializes the action.
 
     Most of the initialization relies on command-line flags.
+
+    Args:
+      parent_flags: Parent flags to inherit from.
+      help_flag: Whether to add and/or handle a --help flag.
+          Default is to add and to handle a --help flag.
     """
-    self._flags = base.Flags()
-    self._flags.AddBoolean(
-        'help',
-        default=False,
-        help='Print the help message for this action.',
-    )
+    name = type(self).__name__
+    self._flags = base.Flags(name=name, parent=parent_flags)
+    self._help_flag = help_flag
+    if self._help_flag in (HelpFlag.ADD_HANDLE, HelpFlag.ADD_NO_HANDLE):
+      if 'help' not in self._flags:
+        self._flags.AddBoolean(
+            name='help',
+            default=False,
+            help='Print the help message for this action.',
+        )
     self.RegisterFlags()
 
   def RegisterFlags(self):
@@ -65,7 +85,7 @@ class Action(object, metaclass=abc.ABCMeta):
     if not self._flags.Parse(args):
       return os.EX_USAGE
 
-    if self.flags.help:
+    if (self._help_flag == HelpFlag.ADD_HANDLE) and self.flags.help:
       name = self.NAME
       if name is None:
         name = base.UnCamelCase(type(self).__name__)
@@ -74,7 +94,6 @@ class Action(object, metaclass=abc.ABCMeta):
       }))
       print()
       self.flags.PrintUsage()
-      base.FLAGS.PrintUsage(header='Global flags:')
       return os.EX_OK
 
     return self.Run(self._flags.GetUnparsed())

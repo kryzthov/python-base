@@ -458,6 +458,34 @@ def Exit():
   os.kill(self_pid, signal.SIGKILL)
 
 
+def ListJavaProcesses():
+  """Lists the Java processes.
+
+  Yields:
+    Pairs (PID, Java class name).
+  """
+  for line in ShellCommandOutput('jps -l').splitlines():
+    line = line.strip()
+    if len(line) == 0: continue
+    (pid, class_name) = line.split()
+    yield (int(pid), class_name)
+
+
+def ProcessExists(pid):
+  """Tests whether a process exists.
+
+  Args:
+    pid: PID of the process to test the existence of.
+  Returns:
+    Whether a process with the specified PID exists.
+  """
+  try:
+    os.kill(pid, 0)
+    return True
+  except ProcessLookupError:
+    return False
+
+
 # ------------------------------------------------------------------------------
 
 
@@ -584,7 +612,17 @@ class Flags(object):
 
   # ----------------------------------------------------------------------------
 
-  def __init__(self):
+  def __init__(self, name, parent=None):
+    """Initializes a new flags parser.
+
+    Args:
+      name: Name for this collection of flags.
+          Used in PrintUsage().
+      parent: Optional parent flags environment.
+    """
+    self._name = name
+    self._parent = parent
+
     # Map: flag name -> flag definition
     self._defs = {}
 
@@ -592,8 +630,8 @@ class Flags(object):
     self._unparsed = None
 
   def Add(self, flag_def):
-    assert (flag_def.name not in self._defs), (
-        'Flag %r already defined' % flag_def.name)
+    assert (flag_def.name not in self), \
+        ('Flag %r already defined' % flag_def.name)
     self._defs[flag_def.name] = flag_def
 
   def AddInteger(self, name, **kwargs):
@@ -646,10 +684,22 @@ class Flags(object):
     self._unparsed = tuple(unparsed)
     return True
 
+  def __contains__(self, name):
+    if name in self._defs:
+      return True
+    if self._parent is not None:
+      return name in self._parent
+    return False
+
   def __getattr__(self, name):
-    assert (self._unparsed is not None), (
-        'Flags have not been parsed yet: cannot access flag %r' % name)
-    return self._defs[name].value
+    assert (self._unparsed is not None), \
+        ('Flags have not been parsed yet: cannot access flag %r' % name)
+    if name in self._defs:
+      return self._defs[name].value
+    elif self._parent is not None:
+      return getattr(self._parent, name)
+    else:
+      raise AttributeError(name)
 
   def GetUnparsed(self):
     assert (self._unparsed is not None), 'Flags have not been parsed yet'
@@ -663,11 +713,12 @@ class Flags(object):
     """
     yield from self._defs.items()
 
-  def PrintUsage(self, header='Flags:'):
+  def PrintUsage(self):
     indent = 8
     ncolumns = Terminal.columns
 
-    print(header)
+    print('-' * 80)
+    print('%s:' % self._name)
     for (name, flag) in sorted(self._defs.items()):
       if flag.help is not None:
         flag_help = WrapText(text=flag.help, ncolumns=ncolumns - indent)
@@ -680,8 +731,11 @@ class Flags(object):
           AddMargin(StripMargin(flag_help), ' ' * indent),
       ))
 
+    if self._parent is not None:
+      self._parent.PrintUsage()
 
-FLAGS = Flags()
+
+FLAGS = Flags(name='Global flags')
 
 
 # ------------------------------------------------------------------------------
