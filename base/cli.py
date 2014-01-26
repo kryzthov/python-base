@@ -23,6 +23,14 @@ class Action(object, metaclass=abc.ABCMeta):
   # Default behavior is to use the un-camel-cased class name.
   NAME = None
 
+  @classmethod
+  def GetName(cls):
+    """Returns this action's name."""
+    name = cls.NAME
+    if name is None:
+      name = cls.__name__
+    return base.UnCamelCase(name, separator='-')
+
   # Usage of this action, overridden by sub-classes:
   USAGE = """
     |Usage:
@@ -43,7 +51,10 @@ class Action(object, metaclass=abc.ABCMeta):
       help_flag: Whether to add and/or handle a --help flag.
           Default is to add and to handle a --help flag.
     """
-    name = type(self).__name__
+    name = 'Flags for %s (%s.%s)' % (
+        self.GetName(),
+        type(self).__module__,
+        type(self).__name__)
     self._flags = base.Flags(name=name, parent=parent_flags)
     self._help_flag = help_flag
     if self._help_flag in (HelpFlag.ADD_HANDLE, HelpFlag.ADD_NO_HANDLE):
@@ -86,11 +97,8 @@ class Action(object, metaclass=abc.ABCMeta):
       return os.EX_USAGE
 
     if (self._help_flag == HelpFlag.ADD_HANDLE) and self.flags.help:
-      name = self.NAME
-      if name is None:
-        name = base.UnCamelCase(type(self).__name__)
       print(base.StripMargin(self.USAGE.strip() % {
-          'this': '%s %s' % (base.GetProgramName(), name),
+          'this': '%s %s' % (base.GetProgramName(), self.GetName()),
       }))
       print()
       self.flags.PrintUsage()

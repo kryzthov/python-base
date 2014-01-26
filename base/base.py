@@ -314,7 +314,7 @@ def UnCamelCase(text, separator='_'):
   Returns:
     The un-camel-cased sequence of characters.
   """
-  split = re.findall(r'[A-Z][a-z0-9]*', text)
+  split = re.findall(r'(?:[A-Z][a-z0-9]*|[a-z0.9]+)', text)
   split = map(str.lower, split)
   split = list(split)
 
