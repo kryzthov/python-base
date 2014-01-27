@@ -31,6 +31,7 @@ class TestBase(unittest.TestCase):
     self.assertEqual('jira_tool', base.UnCamelCase('jira tool'))
     self.assertEqual('jira_tool', base.UnCamelCase('Jira tool'))
     self.assertEqual('jira_tool', base.UnCamelCase(' Jira tool'))
+    self.assertEqual('status_csv', base.UnCamelCase(' StatusCSV'))
 
 if __name__ == '__main__':
   unittest.main()

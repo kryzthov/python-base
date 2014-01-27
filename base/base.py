@@ -110,9 +110,14 @@ def Timestamp():
 
 
 JSON_DECODER = json.JSONDecoder()
-JSON_ENCODER = json.JSONEncoder(
+PRETTY_JSON_ENCODER = json.JSONEncoder(
   indent=2,
   sort_keys=True,
+)
+COMPACT_JSON_ENCODER = json.JSONEncoder(
+  indent=None,
+  sort_keys=True,
+  separators=(',', ':'),
 )
 
 
@@ -127,15 +132,17 @@ def JsonDecode(json_str):
   return JSON_DECODER.decode(json_str)
 
 
-def JsonEncode(py_value):
+def JsonEncode(py_value, pretty=True):
   """Encodes a Python value into a JSON string.
 
   Args:
     py_value: Python value to encode as a JSON string.
+    pretty: True means pretty, False means compact.
   Returns:
     The specified Python value encoded as a JSON string.
   """
-  return JSON_ENCODER.encode(py_value)
+  encoder = PRETTY_JSON_ENCODER if pretty else COMPACT_JSON_ENCODER
+  return encoder.encode(py_value)
 
 
 # ------------------------------------------------------------------------------
