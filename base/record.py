@@ -60,6 +60,16 @@ class Record(object):
     params.update(kwargs)
     return Record(params)
 
+  def __dir__(self):
+    """Lists the fields in this record.
+
+    Overrides the operator dir(record).
+
+    Returns:
+      List of the fields in this record.
+    """
+    return self._params.keys()
+
   def __str__(self):
     return ('Record{%s}'
             % ','.join(map(lambda item: '%s=%s' % item,

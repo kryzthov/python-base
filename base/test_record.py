@@ -19,6 +19,7 @@ Undefined = base.Undefined
 class TestRecord(unittest.TestCase):
   def testConfig(self):
     conf = record.Record()
+    self.assertEquals([], dir(conf))
 
     logging.info('Step 1')
     self.assertFalse('x' in conf)
@@ -30,22 +31,26 @@ class TestRecord(unittest.TestCase):
     self.assertTrue('x' in conf)
     self.assertEqual(1, conf.x)
     self.assertEqual(1, conf['x'])
+    self.assertEquals(['x'], dir(conf))
 
     logging.info('Step 3')
     conf.x = 2
     self.assertTrue('x' in conf)
     self.assertEqual(2, conf.x)
     self.assertEqual(2, conf['x'])
+    self.assertEquals(['x'], dir(conf))
 
     logging.info('Step 4')
     del conf['x']
     self.assertFalse('x' in conf)
     self.assertEqual(Undefined, conf.x)
     self.assertEqual(Undefined, conf.Get('x'))
+    self.assertEquals([], dir(conf))
 
     conf.x = 1
     del conf.x
     self.assertFalse('x' in conf)
+
 
   def testWriteLoad(self):
     conf = record.Record()
