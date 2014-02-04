@@ -18,7 +18,7 @@ from workflow import workflow
 
 class SlowTask(workflow.Task):
   def Run(self):
-    time.sleep(10.0)
+    time.sleep(1.0)
     return self.SUCCESS
 
 
@@ -284,6 +284,142 @@ class TestWorkflow(unittest.TestCase):
     flow2.Build()
 
     workflow.DiffWorkflow(flow1, flow2)
+
+  def testGetUpstreamTasks(self):
+    flow = workflow.Workflow()
+    task1 = SuccessTask(workflow=flow, task_id='task1')
+    task2 = SuccessTask(workflow=flow, task_id='task2')
+    task3 = SuccessTask(workflow=flow, task_id='task3')
+    task4 = SuccessTask(workflow=flow, task_id='task4')
+    task5 = SuccessTask(workflow=flow, task_id='task5')
+    task6 = SuccessTask(workflow=flow, task_id='task6')
+    task7 = SuccessTask(workflow=flow, task_id='task7')
+
+    task3.RunsAfter(task1)
+    task3.RunsAfter(task2)
+    task4.RunsAfter(task3)
+    task5.RunsAfter(task3)
+
+    task7.RunsAfter(task6)
+
+    self.assertEqual(
+        set({task1}),
+        workflow.GetUpstreamTasks(flow, [task1]))
+
+    self.assertEqual(
+        set({task1, task2, task3}),
+        workflow.GetUpstreamTasks(flow, [task3]))
+
+    self.assertEqual(
+        set({task1, task2, task3, task4}),
+        workflow.GetUpstreamTasks(flow, [task4]))
+
+    self.assertEqual(
+        set({task1, task2, task3, task5}),
+        workflow.GetUpstreamTasks(flow, [task5]))
+
+    self.assertEqual(
+        set({task1, task2, task3, task4, task5}),
+        workflow.GetUpstreamTasks(flow, [task4, task5]))
+
+    self.assertEqual(
+        set({task1, task2, task3, task4, task5}),
+        workflow.GetUpstreamTasks(flow, [task3, task4, task5]))
+
+    self.assertEqual(
+        set({task6}),
+        workflow.GetUpstreamTasks(flow, [task6]))
+
+    self.assertEqual(
+        set({task6, task7}),
+        workflow.GetUpstreamTasks(flow, [task7]))
+
+    self.assertEqual(
+        set({task1, task2, task3, task4, task6, task7}),
+        workflow.GetUpstreamTasks(flow, [task4, task7]))
+
+  def testGetDownstreamTasks(self):
+    flow = workflow.Workflow()
+    task1 = SuccessTask(workflow=flow, task_id='task1')
+    task2 = SuccessTask(workflow=flow, task_id='task2')
+    task3 = SuccessTask(workflow=flow, task_id='task3')
+    task4 = SuccessTask(workflow=flow, task_id='task4')
+    task5 = SuccessTask(workflow=flow, task_id='task5')
+    task6 = SuccessTask(workflow=flow, task_id='task6')
+    task7 = SuccessTask(workflow=flow, task_id='task7')
+
+    task3.RunsAfter(task1)
+    task3.RunsAfter(task2)
+    task4.RunsAfter(task3)
+    task5.RunsAfter(task3)
+
+    task7.RunsAfter(task6)
+
+    self.assertEqual(
+        set({task1, task3, task4, task5}),
+        workflow.GetDownstreamTasks(flow, [task1]))
+
+    self.assertEqual(
+        set({task3, task4, task5}),
+        workflow.GetDownstreamTasks(flow, [task3]))
+
+    self.assertEqual(
+        set({task4}),
+        workflow.GetDownstreamTasks(flow, [task4]))
+
+    self.assertEqual(
+        set({task5}),
+        workflow.GetDownstreamTasks(flow, [task5]))
+
+    self.assertEqual(
+        set({task4, task5}),
+        workflow.GetDownstreamTasks(flow, [task4, task5]))
+
+    self.assertEqual(
+        set({task3, task4, task5}),
+        workflow.GetDownstreamTasks(flow, [task3, task4, task5]))
+
+    self.assertEqual(
+        set({task6, task7}),
+        workflow.GetDownstreamTasks(flow, [task6]))
+
+    self.assertEqual(
+        set({task7}),
+        workflow.GetDownstreamTasks(flow, [task7]))
+
+    self.assertEqual(
+        set({task3, task4, task5, task6, task7}),
+        workflow.GetDownstreamTasks(flow, [task3, task6]))
+
+  def testAddDep(self):
+    """Tests that forward declaration of dependencies are properly set."""
+    flow = workflow.Workflow()
+    flow.AddDep('task1', 'task2')
+    task1 = SuccessTask(workflow=flow, task_id='task1')
+    task2 = SuccessTask(workflow=flow, task_id='task2')
+    self.assertTrue('task1' in task2.runs_after)
+    self.assertTrue('task2' in task1.runs_before)
+
+  def testPrune(self):
+    """Tests that forward declaration of dependencies are properly set."""
+    flow = workflow.Workflow()
+    task1 = SuccessTask(workflow=flow, task_id='task1')
+    task2 = SuccessTask(workflow=flow, task_id='task2')
+    task3 = SuccessTask(workflow=flow, task_id='task3')
+    task4 = SuccessTask(workflow=flow, task_id='task4')
+    task5 = SuccessTask(workflow=flow, task_id='task5')
+    task6 = SuccessTask(workflow=flow, task_id='task6')
+    task7 = SuccessTask(workflow=flow, task_id='task7')
+
+    task3.RunsAfter(task1)
+    task3.RunsAfter(task2)
+    task4.RunsAfter(task3)
+    task5.RunsAfter(task3)
+
+    task7.RunsAfter(task6)
+
+    flow.Prune(tasks={task4})
+    self.assertEqual({'task1', 'task2', 'task3', 'task4'}, flow.tasks.keys())
 
 
 # ------------------------------------------------------------------------------

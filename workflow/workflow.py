@@ -28,6 +28,7 @@ import abc
 import collections
 import copy
 import http.server
+import itertools
 import logging
 import os
 import queue
@@ -64,9 +65,17 @@ class CircularDependencyError(Error):
 
 # Task states:
 TaskState = base.MakeTuple('TaskState',
+  # Task is being initialized:
   INIT     = 1,
-  BUILT    = 2,
+
+  # Task initialization is complete,
+  # task is either runnable or waiting for some upstream dependency:
+  PENDING  = 2,
+
+  # Task completed successfully:
   SUCCESS  = 3,
+
+  # Tasks failed:
   FAILURE  = 4,
 )
 
@@ -160,8 +169,8 @@ class Task(object, metaclass=abc.ABCMeta):
   @property
   def is_runnable(self):
     """Returns: whether this task is runnable."""
-    assert (self._state == TaskState.BUILT)
-    return (len(self._pending_deps) == 0)
+    return (self._state == TaskState.PENDING) \
+        and (len(self._pending_deps) == 0)
 
   @property
   def pending_deps(self):
@@ -220,7 +229,7 @@ class Task(object, metaclass=abc.ABCMeta):
     Called internally by Workflow.Build().
     """
     assert (self._state == TaskState.INIT)
-    self._state = TaskState.BUILT
+    self._state = TaskState.PENDING
 
     self._runs_after = frozenset(self._runs_after)
     self._runs_before = frozenset(self._runs_before)
@@ -231,6 +240,9 @@ class Task(object, metaclass=abc.ABCMeta):
     """Returns: a debug representation of this task."""
     return ('Task(id=%s, runs_after=%s, runs_before=%s)'
             % (self.task_id, self._runs_after, self._runs_before))
+
+  def __repr__(self):
+    return str(self)
 
   @abc.abstractmethod
   def Run(self):
@@ -468,24 +480,7 @@ class Workflow(object):
   def Build(self):
     """Completes the worflow definition phase."""
     self._tasks = base.ImmutableDict(self._tasks)
-
-    # Merge and complete the dependency graph:
-    for task in self._tasks.values():
-      for dep_id in task.runs_after:
-        self._deps.add(Dependency(before=dep_id, after=task.task_id))
-      for dep_id in task.runs_before:
-        self._deps.add(Dependency(before=task.task_id, after=dep_id))
-
     self._deps = frozenset(self._deps)
-
-    for dep in self._deps:
-      logging.debug('Applying dependency: %r', dep)
-
-      # dep.before must run before dep.after:
-      self._tasks[dep.before].RunsBefore(dep.after)
-
-      # dep.after must run after dep.before:
-      self._tasks[dep.after].RunsAfter(dep.before)
 
     # Freeze descriptors:
     for task in self._tasks.values():
@@ -830,6 +825,32 @@ class Workflow(object):
             exit_code=0,
         )
         return svg_file.read().decode()
+
+  def Prune(self, tasks):
+    """Prunes the workflow according to a sub-set of required tasks.
+
+    Args:
+      tasks: Collection of tasks to keep.
+          Tasks that are not in this set or not required transitively
+          through upstream dependencies of this set are discarded.
+    """
+    assert not self._started
+
+    # Exhaustive list of tasks to keep:
+    tasks = GetUpstreamTasks(flow=self, tasks=tasks)
+    keep_ids = frozenset(map(lambda task: task.task_id, tasks))
+
+    remove_ids = set(self._tasks.keys())
+    remove_ids.difference_update(keep_ids)
+
+    for task_id in remove_ids:
+      del self._tasks[task_id]
+
+    # Filter dependencies:
+    remove_deps = tuple(filter(
+        lambda dep: (dep.before in remove_ids) or (dep.after in remove_ids),
+        self._deps))
+    self._deps.difference_update(remove_deps)
 
 
 # ------------------------------------------------------------------------------
@@ -1182,6 +1203,55 @@ def DiffWorkflow(flow1, flow2):
     f.write(dot_source.encode())
     f.flush()
     os.system('xdot %s' % f.name)
+
+
+# ------------------------------------------------------------------------------
+
+
+def GetUpstreamTasks(flow, tasks):
+  """Computes the tasks needed by a collection of tasks.
+
+  Args:
+    flow: Workflow to process.
+    tasks: Collection of tasks to list the upstream dependencies.
+  Returns:
+    The transitive dependencies according to the runs_after relationship.
+  """
+  tasks = set(tasks)
+  task_ids = set(map(lambda t: t.task_id, tasks))
+
+  while True:
+    upstream_ids = set(itertools.chain(*map(lambda t: t.runs_after, tasks)))
+    upstream_ids.difference_update(task_ids)
+    if len(upstream_ids) == 0:
+      break
+    task_ids.update(upstream_ids)
+    tasks.update(map(lambda task_id: flow.GetTask(task_id), upstream_ids))
+
+  return tasks
+
+
+def GetDownstreamTasks(flow, tasks):
+  """Computes the tasks that depend on a collection of tasks.
+
+  Args:
+    flow: Workflow to process.
+    tasks: Collection of tasks to list the downstream dependencies.
+  Returns:
+    The transitive dependencies according to the runs_before relationship.
+  """
+  tasks = set(tasks)
+  task_ids = set(map(lambda t: t.task_id, tasks))
+
+  while True:
+    downstream_ids = set(itertools.chain(*map(lambda t: t.runs_before, tasks)))
+    downstream_ids.difference_update(task_ids)
+    if len(downstream_ids) == 0:
+      break
+    task_ids.update(downstream_ids)
+    tasks.update(map(lambda task_id: flow.GetTask(task_id), downstream_ids))
+
+  return tasks
 
 
 # ------------------------------------------------------------------------------
