@@ -5,8 +5,9 @@
 """Tests for module base.base"""
 
 import logging
-import unittest
 import os
+import sys
+import unittest
 
 from base import base
 
@@ -33,5 +34,12 @@ class TestBase(unittest.TestCase):
     self.assertEqual('jira_tool', base.UnCamelCase(' Jira tool'))
     self.assertEqual('status_csv', base.UnCamelCase(' StatusCSV'))
 
+
+def Main(args):
+  args = list(args)
+  args.insert(0, sys.argv[0])
+  unittest.main(argv=args)
+
+
 if __name__ == '__main__':
-  unittest.main()
+  base.Run(Main)

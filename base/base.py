@@ -375,9 +375,27 @@ def MakeIdent(text, sep='_'):
 # ------------------------------------------------------------------------------
 
 
+def _ComputeProgramName():
+  program_path = os.path.abspath(sys.argv[0])
+  if not os.path.exists(program_path):
+    return 'unknown'
+  else:
+    return os.path.basename(program_path)
+
+
+_PROGRAM_NAME = _ComputeProgramName()
+
+
+def SetProgramName(program_name):
+  """Sets this program's name."""
+  global _PROGRAM_NAME
+  _PROGRAM_NAME = program_name
+
+
 def GetProgramName():
   """Returns: this program's name."""
-  return os.path.basename(sys.argv[0])
+  global _PROGRAM_NAME
+  return _PROGRAM_NAME
 
 
 def ShellCommandOutput(command):
@@ -1042,28 +1060,31 @@ ContentType = MakeTuple('ContentType',
 # ------------------------------------------------------------------------------
 
 
-def Run(main):
-  """Runs a Python program's Main() function.
+_LOGGING_INITIALIZED = False
+
+
+def SetupLogging(
+    level,
+    console_level,
+    file_level,
+):
+  """Initializes the logging system.
 
   Args:
-    main: Main function, with an expected signature like
-      exit_code = main(args)
-      where args is a list of the unparsed command-line arguments.
+    level: Root logger level.
+    console_level: Log level for the console handler.
+    file_level: Log level for the file handler.
   """
-  # Parse command-line arguments:
+  global _LOGGING_INITIALIZED
+  if _LOGGING_INITIALIZED:
+    logging.debug('SetupLogging: logging system already initialized')
+    return
+
   program_name = GetProgramName()
-  if not FLAGS.Parse(sys.argv[1:]):
-    FLAGS.PrintUsage()
-    return os.EX_USAGE
+  logging.addLevelName(LogLevel.DEBUG_VERBOSE, 'DEBUG_VERBOSE')
+  logging.addLevelName(LogLevel.ALL, 'ALL')
 
   # Initialize the logging system:
-  try:
-    log_root_level = ParseLogLevelFlag(FLAGS.log_level)
-    log_console_level = ParseLogLevelFlag(FLAGS.log_console_level)
-    log_file_level = ParseLogLevelFlag(FLAGS.log_file_level)
-  except Error as err:
-    print(err)
-    return os.EX_USAGE
 
   log_formatter = logging.Formatter(
       fmt='%(asctime)s %(levelname)s %(filename)s:%(lineno)s : %(message)s',
@@ -1079,15 +1100,14 @@ def Run(main):
     )
   log_formatter.formatTime = FormatTime
 
-  logging.root.setLevel(log_root_level)
+  logging.root.handlers.clear()
+  logging.root.setLevel(level)
 
   console_handler = logging.StreamHandler()
   console_handler.setFormatter(log_formatter)
-  console_handler.setLevel(log_console_level)
+  console_handler.setLevel(console_level)
   logging.root.addHandler(console_handler)
 
-  logging.addLevelName(LogLevel.DEBUG_VERBOSE, 'DEBUG_VERBOSE')
-  logging.addLevelName(LogLevel.ALL, 'ALL')
 
   # Initialize log dir:
   timestamp = Timestamp()
@@ -1108,8 +1128,38 @@ def Run(main):
 
   file_handler = logging.FileHandler(filename=log_file)
   file_handler.setFormatter(log_formatter)
-  file_handler.setLevel(log_file_level)
+  file_handler.setLevel(file_level)
   logging.root.addHandler(file_handler)
+
+  _LOGGING_INITIALIZED = True
+
+
+def Run(main):
+  """Runs a Python program's Main() function.
+
+  Args:
+    main: Main function, with an expected signature like
+      exit_code = main(args)
+      where args is a list of the unparsed command-line arguments.
+  """
+  # Parse command-line arguments:
+  if not FLAGS.Parse(sys.argv[1:]):
+    FLAGS.PrintUsage()
+    return os.EX_USAGE
+
+  try:
+    log_level = ParseLogLevelFlag(FLAGS.log_level)
+    log_console_level = ParseLogLevelFlag(FLAGS.log_console_level)
+    log_file_level = ParseLogLevelFlag(FLAGS.log_file_level)
+  except Error as err:
+    print(err)
+    return os.EX_USAGE
+
+  SetupLogging(
+      level = log_level,
+      console_level = log_console_level,
+      file_level = log_file_level,
+  )
 
   # Run program:
   sys.exit(main(FLAGS.GetUnparsed()))
