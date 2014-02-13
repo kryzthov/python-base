@@ -788,11 +788,15 @@ class Workflow(object):
       if task.start_time is None:
         return task.task_id
       elif task.end_time is None:
-        return ('%s (start time: %s)'
-                % (task.task_id, task.start_time))
+        return ('%s (start time: %s - elapsed: %s)'
+                % (task.task_id,
+                   base.Timestamp(task.start_time.timestamp()),
+                   datetime.datetime.now() - task.start_time))
       else:
-        return ('%s (start time: %s - end time: %s : duration: %s)'
-                % (task.task_id, task.start_time, task.end_time,
+        return ('%s (start time: %s - end time: %s - duration: %s)'
+                % (task.task_id,
+                   base.Timestamp(task.start_time.timestamp()),
+                   base.Timestamp(task.end_time.timestamp()),
                    task.end_time - task.start_time))
 
     successes = frozenset(map(FormatTask, successes))

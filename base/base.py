@@ -80,19 +80,22 @@ def NowDateTime():
   return datetime.datetime.now()
 
 
-def Timestamp():
+def Timestamp(ts=None):
   """Reports the current time as a human-readable timestamp.
 
   Timestamp has micro-second precision.
   Formatted as 'yyyymmdd-hhmmss-mmmmmm-tz'.
 
+  Args:
+    ts: Optional explicit timestamp, in seconds since Epoch.
   Returns:
     the current time as a human-readable timestamp.
   """
-  now_secs = time.time()  # in seconds since Epoch
-  now = time.localtime(now_secs)
-  now_subsecs = (now_secs - int(now_secs))
-  microsecs = int(now_subsecs * 1000000)
+  if ts is None:
+    ts = time.time()  # in seconds since Epoch
+  now = time.localtime(ts)
+  ts_subsecs = (ts - int(ts))
+  microsecs = int(ts_subsecs * 1000000)
   return '%04d%02d%02d-%02d%02d%02d-%06d-%s' % (
       now.tm_year,
       now.tm_mon,
