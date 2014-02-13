@@ -27,6 +27,7 @@ Usage:
 import abc
 import collections
 import copy
+import datetime
 import http.server
 import itertools
 import logging
@@ -151,6 +152,10 @@ class Task(object, metaclass=abc.ABCMeta):
     # While workflow runs, lists task IDs this task is waiting for:
     self._pending_deps = None
 
+    # datetime instances set when the task runs:
+    self._start_time = None
+    self._end_time = None
+
   @property
   def workflow(self):
     """Returns: the workflow this task belongs to."""
@@ -262,7 +267,12 @@ class Task(object, metaclass=abc.ABCMeta):
       Task completion status.
     """
     try:
-      self._state = self.Run()
+      self._start_time = datetime.datetime.now()
+      try:
+        self._state = self.Run()
+      finally:
+        self._end_time = datetime.datetime.now()
+
       if not self.completed:
         logging.error(
             '%r returned invalid task completion code: %r',
@@ -300,6 +310,16 @@ class Task(object, metaclass=abc.ABCMeta):
     """
     self._state = state
     assert self.completed
+
+  @property
+  def start_time(self):
+    """Returns: the start time of the task run. or None if not started yet."""
+    return self._start_time
+
+  @property
+  def end_time(self):
+    """Returns: the end time of the task run, or None if not completed yet."""
+    return self._end_time
 
 
 # ------------------------------------------------------------------------------
@@ -757,15 +777,29 @@ class Workflow(object):
     Returns:
       The running state of this workflow as an HTML table.
     """
-    def TaskIDGetter(task):
-      return task.task_id
-
     with self._lock:
-      successes = frozenset(map(TaskIDGetter, self._success))
-      failures = frozenset(map(TaskIDGetter, self._failure))
-      pending = frozenset(map(TaskIDGetter, self._pending))
-      running = frozenset(map(TaskIDGetter, self._running))
-      runnable = frozenset(map(TaskIDGetter, self._runnable))
+      successes = frozenset(self._success)
+      failures = frozenset(self._failure)
+      pending = frozenset(self._pending)
+      running = frozenset(self._running)
+      runnable = frozenset(self._runnable)
+
+    def FormatTask(task):
+      if task.start_time is None:
+        return task.task_id
+      elif task.end_time is None:
+        return ('%s (start time: %s)'
+                % (task.task_id, task.start_time))
+      else:
+        return ('%s (start time: %s - end time: %s : duration: %s)'
+                % (task.task_id, task.start_time, task.end_time,
+                   task.end_time - task.start_time))
+
+    successes = frozenset(map(FormatTask, successes))
+    failures = frozenset(map(FormatTask, failures))
+    pending = frozenset(map(FormatTask, pending))
+    running = frozenset(map(FormatTask, running))
+    runnable = frozenset(map(FormatTask, runnable))
 
     return base.StripMargin("""\
     |Running: %(nrunning)s

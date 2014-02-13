@@ -16,9 +16,18 @@ from base import base
 from workflow import workflow
 
 
+FLAGS = base.FLAGS
+
+FLAGS.AddFloat(
+    name='slow_task_duration',
+    default=1.0,
+    help='Duration of slow tasks, in seconds.',
+)
+
+
 class SlowTask(workflow.Task):
   def Run(self):
-    time.sleep(1.0)
+    time.sleep(FLAGS.slow_task_duration)
     return self.SUCCESS
 
 
