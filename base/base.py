@@ -27,6 +27,7 @@ import collections
 import datetime
 import getpass
 import http.server
+import inspect
 import json
 import logging
 import os
@@ -569,7 +570,13 @@ class Flags(object):
   class StringFlag(object):
     """Basic string flag parser."""
 
-    def __init__(self, name, default=None, help=None):
+    def __init__(
+        self,
+        name,
+        default=None,
+        help=None,
+        module=None,
+    ):
       """Constructs a specification for a string CLI flag.
 
       Args:
@@ -577,11 +584,21 @@ class Flags(object):
             Dashes are normalized to underscores.
         default: Optional default value for the flag if unspecified.
         help: Help message to include when displaying the usage text.
+        module: Where the flag is defined.
       """
       self._name = name.replace('-', '_')
       self._value = default
       self._default = default
       self._help = help
+      if module is None:
+        frame = inspect.stack()[2]
+        py_module = inspect.getmodule(frame[0])
+        if py_module is None:
+          print('Cannot find module for flag %r' % name)
+        else:
+          module = py_module.__name__
+          # print('Module = %r -> %r' % (py_module, module))
+      self._module = module
 
     def Parse(self, argument):
       """Parses the command-line argument.
@@ -610,6 +627,14 @@ class Flags(object):
     @property
     def help(self):
       return self._help
+
+    @property
+    def module(self):
+      return self._module
+
+    @property
+    def full_name(self):
+      return '%s.%s' % (self._module, self._name)
 
   class IntegerFlag(StringFlag):
     @property
@@ -654,13 +679,17 @@ class Flags(object):
     # Map: flag name -> flag definition
     self._defs = {}
 
+    # Map: full name -> flag definition
+    self._full_defs = {}
+
     # After parsing, tuple of unparsed arguments:
     self._unparsed = None
 
   def Add(self, flag_def):
-    assert (flag_def.name not in self), \
-        ('Flag %r already defined' % flag_def.name)
+    assert (flag_def.name not in self._defs), \
+        ('Flag %r already defined' % flag_def.full_name)
     self._defs[flag_def.name] = flag_def
+    self._full_defs[flag_def.full_name] = flag_def
 
   def AddInteger(self, name, **kwargs):
     self.Add(Flags.IntegerFlag(name, **kwargs))
@@ -703,11 +732,13 @@ class Flags(object):
       key = match.group(1).replace('-', '_')
       value = match.group(2)
 
-      if key not in self._defs:
+      if key in self._defs:
+        self._defs[key].Parse(value)
+      elif key in self._full_defs:
+        self._full_defs[key].Parse(value)
+      else:
         unparsed.append(arg)
         continue
-
-      self._defs[key].Parse(value)
 
     self._unparsed = tuple(unparsed)
     return True
@@ -752,11 +783,15 @@ class Flags(object):
         flag_help = WrapText(text=flag.help, ncolumns=ncolumns - indent)
       else:
         flag_help = 'Undocumented'
-      print(' --%s: %s = %r\n%s\n' % (
-          name,
+      print(
+          ' --%s: %s = %r\n'
+          '%s\n'
+          '%sFull name: --%s\n' % (
+          name.replace('_', '-'),
           flag.type,
           flag.default,
           AddMargin(StripMargin(flag_help), ' ' * indent),
+          ' ' * indent, flag.full_name,
       ))
 
     if self._parent is not None:
