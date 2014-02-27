@@ -32,7 +32,7 @@ def Main():
 
   setup(
     name = 'python-base',
-    version = '1.0.7',
+    version = '1.0.8',
     packages = ['base', 'workflow'],
     package_dir = {
         'base': 'base',
