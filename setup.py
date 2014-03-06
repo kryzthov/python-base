@@ -39,6 +39,9 @@ def Main():
         'workflow': 'workflow',
     },
     script_name = 'setup.py',
+    scripts = [
+        'scripts/daemonize.py',
+    ],
 
     # metadata for upload to PyPI
     author = 'Christophe Taton',
