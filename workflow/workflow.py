@@ -34,10 +34,12 @@ import logging
 import os
 import queue
 import re
+import signal
 import sys
 import tempfile
 import threading
 import traceback
+import urllib
 
 from base import base
 from base import command
@@ -758,7 +760,10 @@ class Workflow(object):
         color = 'green'
       else:
         color = 'black'
-      return ('  %s [color="%s"];' % (base.MakeIdent(task_id), color))
+
+      label = '\\n'.join(task_id.split('.'))
+      return ('  %s [color="%s", label="%s"];'
+              % (base.MakeIdent(task_id), color, label))
 
     def MakeDep(dep):
       return ('  %s -> %s;' %
@@ -861,7 +866,14 @@ class Workflow(object):
         cmd = command.Command(
             args=['dot', '-Tsvg', '-o%s' % svg_file.name, dot_file.name],
             exit_code=0,
+            wait_for=False,
         )
+        # Allow 10s for Graphiz to complete, or kill it:
+        try:
+          cmd.WaitFor(timeout=10.0)
+        except TimeoutError:
+          cmd.Kill(sig=signal.SIGKILL)
+          raise
         return svg_file.read().decode()
 
   def Prune(self, tasks):
@@ -1101,32 +1113,33 @@ class IOTask(Task):
 def _MakeWorkflowMonitoringHandlerClass(monitor):
   class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+      parsed = urllib.parse.urlparse(self.path)
+      path = parsed.path
+      query = urllib.parse.parse_qs(parsed.query)
+
+      logging.debug('Parsed URL=%s path=%r query=%r', parsed, path, query)
+
       flow = monitor.workflow
       if flow is None:
         self.send_response(404)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write('No workflow assigned'.encode())
-      elif monitor.mode == 'svg':
+      elif path == '/svg':
         self.send_response(200)
         self.send_header('Content-type', 'image/svg+xml')
         self.end_headers()
         self.wfile.write(flow.DumpAsSVG().encode())
-      elif monitor.mode == 'dot':
+      elif path == '/dot':
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(flow.DumpRunStateAsDot().encode())
-      elif monitor.mode == 'table':
+      else:
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(flow.DumpStateAsTable().encode())
-      else:
-        self.send_response(404)
-        self.send_header('Content-type', 'text/plain')
-        self.end_headers()
-        self.wfile.write(('Invalid rendering mode: %r' % monitor.mode).encode())
 
       self.wfile.flush()
 
@@ -1141,7 +1154,6 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
       interface='0.0.0.0',
       port=8000,
       workflow=None,
-      mode='svg',
   ):
     """Creates a new HTTP endpoint to monitor a workflow.
 
@@ -1150,25 +1162,18 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
       port: TCP port to listen on.
       workflow: Optional workflow to monitor.
           Can be set or updated later with SetWorkflow().
-      mode: Rendering mode (either 'dot' or 'svg').
     """
     super(WorkflowHTTPMonitor, self).__init__(
         server_address=(interface, port),
         RequestHandlerClass=_MakeWorkflowMonitoringHandlerClass(self),
     )
     self._interface = interface
-    self._thread = threading.Thread(target=self._ServeThread)
+    self._thread = threading.Thread(target=self._ServeThread, daemon=True)
     self._workflow = workflow
-    assert (mode in ('svg', 'dot', 'table'))
-    self._mode = mode
 
   @property
   def workflow(self):
     return self._workflow
-
-  @property
-  def mode(self):
-    return self._mode
 
   def SetWorkflow(self, workflow):
     self._workflow = workflow

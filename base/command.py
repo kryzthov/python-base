@@ -5,6 +5,7 @@
 
 import logging
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -157,12 +158,18 @@ class Command(object):
     if wait_for:
       self.WaitFor()
 
-  def WaitFor(self):
-    """Waits for this command to complete."""
+  def WaitFor(self, timeout=None):
+    """Waits for this command to complete.
+
+    Args:
+      timeout: Maximum amount of time to wait for the process, in seconds.
+    Raises:
+      TimeoutExpired: if the timeout is reached.
+    """
     assert (self._process is not None), 'Command has not been started.'
     assert (self._output_bytes is None), 'Command has already completed.'
 
-    self._process.wait()
+    self._process.wait(timeout=timeout)
 
     with open(self._output_path, 'rb') as f:
       self._output_bytes = f.read()
@@ -215,6 +222,14 @@ class Command(object):
           self.output_text,
           self.error_text,
       ))
+
+  def Kill(self, sig=signal.SIGTERM):
+    """Sends a signal to the process for this command.
+
+    Args:
+      sig: Signal to send.
+    """
+    os.kill(self._process.pid, sig)
 
   @property
   def output_bytes(self):
