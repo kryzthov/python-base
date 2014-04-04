@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# -*- mode: python -*-
 # -*- coding: utf-8 -*-
+# -*- mode: python -*-
 
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file

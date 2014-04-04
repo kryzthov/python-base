@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# -*- mode: python -*-
 # -*- coding: utf-8 -*-
+# -*- mode: python -*-
+
 """Shared base utilities for Python applications.
 
 Mainly:

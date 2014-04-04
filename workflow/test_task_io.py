@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# -*- mode: python -*-
 # -*- coding: utf-8 -*-
+# -*- mode: python -*-
 
 """Unit-tests for task I/O."""
 

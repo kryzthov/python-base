@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# -*- mode: python -*-
 # -*- coding: utf-8 -*-
+# -*- mode: python -*-
 
 import getpass
 import logging

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# -*- mode: python -*-
 # -*- coding: utf-8 -*-
+# -*- mode: python -*-
 
 """General purpose workflow of tasks with dependencies.
 
@@ -336,6 +336,10 @@ class Task(object, metaclass=abc.ABCMeta):
   def end_time(self):
     """Returns: the end time of the task run, or None if not completed yet."""
     return self._end_time
+
+  def GetGraphvizLabel(self):
+    """Returns: a label for the Graphiz node representing this task."""
+    return self.task_id
 
 
 # ------------------------------------------------------------------------------
@@ -760,12 +764,25 @@ class Workflow(object):
       deps='\n'.join(deps),
     )
 
-  def DumpRunStateAsDot(self):
+  @staticmethod
+  def _GetTaskLabel(task):
+    return task.GetGraphvizLabel()
+
+  def DumpRunStateAsDot(
+      self,
+      make_task_label=None,
+  ):
     """Dumps this workflow as a Graphviz/Dot definition.
 
+    Args:
+      make_task_label: Optional function: task -> task node label.
+          Default is to use Task.MakeDotLabel().
     Returns:
       A Graphviz/Dot definition for this workflow.
     """
+    if make_task_label is None:
+      make_task_label = self._GetTaskLabel
+
     def MakeNode(task):
       task_id = task.task_id
       if task.state == TaskState.FAILURE:
@@ -777,7 +794,7 @@ class Workflow(object):
       else:
         color = 'black'
 
-      label = '\\n'.join(task_id.split('.'))
+      label = make_task_label(task)
       return ('  %s [color="%s", label="%s"];'
               % (base.MakeIdent(task_id), color, label))
 
@@ -1180,14 +1197,14 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
   def __init__(
       self,
       interface='0.0.0.0',
-      port=8000,
+      port=0,
       workflow=None,
   ):
     """Creates a new HTTP endpoint to monitor a workflow.
 
     Args:
-      interface: TCP interface to listen on.
-      port: TCP port to listen on.
+      interface: TCP interface to listen on. 0 or empty means all interfaces.
+      port: TCP port to listen on. 0 means pick a random free port.
       workflow: Optional workflow to monitor.
           Can be set or updated later with SetWorkflow().
     """
@@ -1208,9 +1225,8 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
 
   def Start(self):
     self._thread.start()
-    logging.info(
-        'Workflow monitor started on http://%s:%s',
-        self._interface, self.server_port)
+    logging.info('Workflow monitor started on http://%s:%s',
+                 self.server_name, self.server_port)
 
   def Stop(self):
     self.shutdown()
