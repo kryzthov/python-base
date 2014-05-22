@@ -292,16 +292,25 @@ class Task(object, metaclass=abc.ABCMeta):
       base.Exit()
 
   def _TaskSuccess(self, task):
-    """Processes the success of a task."""
-    assert (task.task_id in self._runs_after)
-    assert (task.task_id in self._pending_deps)
+    """Processes the success of a task.
+
+    Args:
+      task: Task whose success is reported.
+    """
+    assert (task.task_id in self._runs_after), task.task_id
+    assert (task.task_id in self._pending_deps), task.task_id
     self._pending_deps.remove(task.task_id)
 
   def _TaskFailure(self, task):
-    """Processes the failure of a task."""
-    assert (task.task_id in self._runs_after)
-    assert (task.task_id in self._pending_deps)
-    self._pending_deps.remove(task.task_id)
+    """Processes the failure of a task.
+
+    Args:
+      task: Task whose failure is reported.
+    """
+    assert (task.task_id in self._runs_after), \
+        ('%s depending on %s' % (self.task_id, task.task_id))
+    assert (task.task_id in self._pending_deps), \
+        ('%s depending on %s' % (self.task_id, task.task_id))
     self._state = TaskState.FAILURE
 
   def _SetCompletionState(self, state):
@@ -687,6 +696,8 @@ class Workflow(object):
         task: Transitive dependency that fails.
         cause: Task that causes the dependency to fail.
       """
+      logging.debug(
+          'Task %r failed as a dependency of %r', task.task_id, cause.task_id)
       task._TaskFailure(cause)
       self._pending.discard(task)
       self._failure.add(task)
