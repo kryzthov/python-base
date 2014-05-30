@@ -674,17 +674,31 @@ class Flags(object):
   def AddFloat(self, name, **kwargs):
     self.Add(Flags.FloatFlag(name, **kwargs))
 
-  def Parse(self, args):
+  def Parse(self, args, config_file=None):
     """Parses the command-line arguments.
 
     Args:
       args: List of command-line arguments.
+      config_file: Location of a file containing a json object with base flag values (values in
+          args will take precedence over these values).
     Returns:
       Whether successful.
     """
     unparsed = []
 
     skip_parse = False
+
+    if config_file is not None:
+      with open(config_file) as config_file_handle:
+        config_dict = json.load(fp=config_file_handle)
+
+        # Load configuration file values.
+        for key, value in config_dict.items():
+          if key not in self._defs:
+            logging.warning('Found unused configuration entry. %s: %r' % (key, value))
+            continue
+
+          self._defs[key].Parse(value)
 
     for arg in args:
       if arg == '--':

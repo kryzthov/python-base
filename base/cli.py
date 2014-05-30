@@ -85,15 +85,17 @@ class Action(object, metaclass=abc.ABCMeta):
     """
     raise Error('Abstract method')
 
-  def __call__(self, args):
+  def __call__(self, args, config_file=None):
     """Allows invoking an action as a function.
 
     Args:
       args: Command-line arguments specific to the action.
+      config_file: Location of a file containing a json object with base flag values (values in
+          args will take precedence over these values).
     Returns:
       Exit code.
     """
-    if not self._flags.Parse(args):
+    if not self._flags.Parse(args, config_file):
       return os.EX_USAGE
 
     if (self._help_flag == HelpFlag.ADD_HANDLE) and self.flags.help:
