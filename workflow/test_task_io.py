@@ -19,49 +19,46 @@ from workflow import workflow
 
 
 class Task1(workflow.IOTask):
-  def RunWithIO(self, output):
-    logging.info('Task1 is running NOW')
-    output.timestamp = base.Timestamp()
-    return self.SUCCESS
+    def run_with_io(self, output):
+        logging.info('Task1 is running NOW')
+        output.timestamp = base.timestamp()
+        return self.SUCCESS
 
 
 class Task2(workflow.IOTask):
-  def GetTaskRunID(self):
-    return '.'.join([
-        self.task_id,
-        'task1:timestamp=%s' % self.input.task1.timestamp,
-    ])
+    def get_task_run_id(self):
+        return '.'.join([self.task_id, 'task1:timestamp=%s' % self.input.task1.timestamp])
 
-  def RunWithIO(self, output, task1):
-    logging.info('Task2 input task1=%r' % task1)
-    return self.SUCCESS
+    def run_with_io(self, output, task1):
+        logging.info('Task2 input task1=%r' % task1)
+        return self.SUCCESS
 
 
 class TestWorkflow(unittest.TestCase):
-  def testTaskIO(self):
-    flow = workflow.Workflow()
-    task1 = Task1(workflow=flow, task_id='task1')
-    task2 = Task2(workflow=flow, task_id='task2')
+    def test_task_io(self):
+        flow = workflow.Workflow()
+        task1 = Task1(workflow=flow, task_id='task1')
+        task2 = Task2(workflow=flow, task_id='task2')
 
-    task2.BindInputToTaskOutput('task1', task1)
+        task2.bind_input_to_task_output('task1', task1)
 
-    flow.Build()
-    flow.Process(nworkers=10)
+        flow.build()
+        flow.process(nworkers=10)
 
-    self.assertEqual(workflow.TaskState.SUCCESS, task1.state)
-    self.assertEqual(workflow.TaskState.SUCCESS, task2.state)
+        self.assertEqual(workflow.TaskState.SUCCESS, task1.state)
+        self.assertEqual(workflow.TaskState.SUCCESS, task2.state)
 
-    print(flow.DumpAsDot())
+        print(flow.dump_as_dot())
 
 
 # ------------------------------------------------------------------------------
 
 
-def Main(args):
-  args = list(args)
-  args.insert(0, sys.argv[0])
-  unittest.main(argv=args)
+def main(args):
+    args = list(args)
+    args.insert(0, sys.argv[0])
+    unittest.main(argv=args)
 
 
 if __name__ == '__main__':
-  base.Run(Main)
+    base.run(main)

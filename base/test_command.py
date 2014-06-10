@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# -*- mode: python -*-
 # -*- coding: utf-8 -*-
+# -*- mode: python -*-
 
 """Tests for module base.base"""
 
@@ -15,23 +15,23 @@ from base import command
 
 class TestCommand(unittest.TestCase):
 
-  def testCommand(self):
-    cmd = command.Command('/bin/ls', '-ald', '/tmp', exit_code=0)
-    self.assertEqual(0, cmd.exit_code)
-    self.assertTrue('/tmp' in cmd.output_text)
+    def test_command(self):
+        cmd = command.Command('/bin/ls', '-ald', '/tmp', exit_code=0)
+        self.assertEqual(0, cmd.exit_code)
+        self.assertTrue('/tmp' in cmd.output_text)
 
-  def testExitCode(self):
-    cmd = command.Command('false', exit_code=1)
+    def test_exit_code(self):
+        cmd = command.Command('false', exit_code=1)
 
-  def testArgsList(self):
-    cmd = command.Command(args=['false'], exit_code=1)
+    def test_args_list(self):
+        cmd = command.Command(args=['false'], exit_code=1)
 
 
-def Main(args):
-  args = list(args)
-  args.insert(0, sys.argv[0])
-  unittest.main(argv=args)
+def main(args):
+    args = list(args)
+    args.insert(0, sys.argv[0])
+    unittest.main(argv=args)
 
 
 if __name__ == '__main__':
-  base.Run(Main)
+    base.run(main)

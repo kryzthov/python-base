@@ -79,21 +79,21 @@ class Daemonize(cli.Action):
   Sends email notifications.
   """
 
-  def RegisterFlags(self):
-    self.flags.AddFloat(
+  def register_flags(self):
+    self.flags.add_float(
         name='restart_cooldown_time_interval',
         default=10.0,
         help='Cool-down time interval before restarting a process, in seconds.',
     )
 
-    self.flags.AddInteger(
+    self.flags.add_integer(
         name='max_restart',
         default=0,
         help=('Maximum number of restarts before giving up.\n'
               'Zero or negative means no maximum (ie. restart forever).'),
     )
 
-  def Run(self, args):
+  def run(self, args):
     start_count = 0
     has_max_restarts = (self.flags.max_restart > 0)
     command_args = tuple(args)
@@ -157,10 +157,10 @@ class Daemonize(cli.Action):
 # ------------------------------------------------------------------------------
 
 
-def Main(args):
+def main(args):
   daemonize_cli = Daemonize(parent_flags=base.FLAGS)
   return daemonize_cli(args)
 
 
 if __name__ == '__main__':
-  base.Run(Main)
+  base.run(main)
