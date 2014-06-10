@@ -41,14 +41,14 @@ class Record(object):
   def __getitem__(self, key):
     return self._params[key]
 
-  def Get(self, key, default=base.Undefined):
+  def get(self, key, default=base.Undefined):
     return self._params.get(key, default)
 
-  def Copy(self):
+  def copy(self):
     """Returns: a copy of this record."""
-    return self.With()
+    return self.update()
 
-  def With(self, **kwargs):
+  def update(self, **kwargs):
     """Creates a copy of this record with some parameters updated.
 
     Args:
@@ -92,13 +92,13 @@ class Record(object):
     """Customize deserialization through pickle."""
     self.__dict__['_params'] = state['_params']
 
-  def WriteToFile(self, file_path):
+  def write_to_file(self, file_path):
     with open(file_path, 'wb') as f:
       pickler = pickle.Pickler(f)
       pickler.dump(self)
 
 
-def LoadFromFile(file_path):
+def load_from_file(file_path):
   """Loads a record from a file.
 
   Args:
