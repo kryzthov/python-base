@@ -926,6 +926,47 @@ def Memoize():
 # ------------------------------------------------------------------------------
 
 
+def get_terminal_size():
+    """Reports the terminal size.
+
+    From http://stackoverflow.com/questions/566746
+
+    Returns:
+        A pair (nlines, ncolumns).
+    """
+    def ioctl_gwinsz_fd(fd):
+        """Use GWINSZ ioctl on stdin, stdout, stderr.
+
+        Args:
+            fd: File descriptor.
+        Returns:
+            Pair (nlines, ncolumns) if the ioctl succeeded, or None.
+        """
+        try:
+            import fcntl
+            import termios
+            import struct
+            return struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, '1234'))
+        except:
+            return None
+
+    def ioctl_gwinsz_path(path):
+        try:
+            fd = os.open(path, os.O_RDONLY)
+            try:
+                return ioctl_gwinsz_fd(fd)
+            finally:
+                os.close(fd)
+        except:
+            return None
+
+    return ioctl_gwinsz_fd(0) \
+        or ioctl_gwinsz_fd(1) \
+        or ioctl_gwinsz_fd(2) \
+        or ioctl_gwinsz_path(os.ctermid()) \
+        or (os.environ.get('LINES', 25), os.environ.get('COLUMNS', 80))
+
+
 class _Terminal(object):
   """Map of terminal colors."""
 
@@ -974,7 +1015,7 @@ class _Terminal(object):
     Returns:
       The number of columns in the terminal.
     """
-    return int(ShellCommandOutput('tput cols'))
+    return get_terminal_size()[1]
 
   @property
   def lines(self):
@@ -983,7 +1024,7 @@ class _Terminal(object):
     Returns:
       The number of lines in the terminal.
     """
-    return int(ShellCommandOutput('tput lines'))
+    return get_terminal_size()[0]
 
 
 Terminal = _Terminal()
