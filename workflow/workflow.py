@@ -83,6 +83,11 @@ TaskState = base.MakeTuple('TaskState',
 )
 
 
+DOWNSTREAM = 'downstream'
+UPSTREAM = 'upstream'
+
+
+
 def GetTaskID(task_or_id):
   """Gets the ID of a task, given a parameter that is either a Task or an ID.
 
@@ -887,20 +892,27 @@ class Workflow(object):
           raise
         return svg_file.read().decode()
 
-  def Prune(self, tasks):
+  def Prune(self, tasks, direction):
     """Prunes the workflow according to a sub-set of required tasks.
 
     Args:
       tasks: Collection of tasks to keep.
           Tasks that are not in this set or not required transitively
-          through upstream dependencies of this set are discarded.
+          through upstream/downstream dependencies of this set are discarded.
+      direction: Either DOWNSTREAM or UPSTREAM.
     """
     assert not self._started
 
     # Exhaustive list of tasks to keep:
-    tasks = GetUpstreamTasks(flow=self, tasks=tasks)
+    if direction == UPSTREAM:
+      tasks = GetUpstreamTasks(flow=self, tasks=tasks)
+    elif direction == DOWNSTREAM:
+      tasks = GetDownstreamTasks(flow=self, tasks=tasks)
+    else:
+      raise Error('Invalid filtering direction: %r' % direction)
     keep_ids = frozenset(map(lambda task: task.task_id, tasks))
 
+    # IDs of the tasks to remove:
     remove_ids = set(self._tasks.keys())
     remove_ids.difference_update(keep_ids)
 
@@ -912,6 +924,11 @@ class Workflow(object):
         lambda dep: (dep.before in remove_ids) or (dep.after in remove_ids),
         self._deps))
     self._deps.difference_update(remove_deps)
+
+    # Update task descriptors:
+    for task in self._tasks.values():
+      task._runs_after.difference_update(remove_ids)
+      task._runs_before.difference_update(remove_ids)
 
 
 # ------------------------------------------------------------------------------
