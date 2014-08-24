@@ -13,11 +13,11 @@ from base import base
 
 
 FLAGS = base.FLAGS
-LogLevel = base.LogLevel
-Default = base.Default
+LOG_LEVEL = base.LOG_LEVEL
+DEFAULT = base.DEFAULT
 
 
-FLAGS.AddString(
+FLAGS.add_string(
     name='smtp_server',
     default='localhost:25',
     help=('Default SMTP server to use to send emails.\n'
@@ -25,40 +25,40 @@ FLAGS.AddString(
           'For example, GMail uses smtp.gmail.com:587 with TLS.'),
 )
 
-FLAGS.AddString(
+FLAGS.add_string(
     name='email_recipients',
     default=None,
     help=('Comma-separated list of default recipients for email notifications.\n'
           'None or empty means email notifications are diabled by default.'),
 )
 
-FLAGS.AddString(
+FLAGS.add_string(
     name='email_sender',
     default='%s@%s' % (getpass.getuser(), socket.getfqdn()),
     help=('Default sender email address for email notifications.\n'
           'None or empty means email notifications are disabled by default.'),
 )
 
-FLAGS.AddBoolean(
+FLAGS.add_boolean(
     name='smtp_use_tls',
     default=False,
     help=('Whether to use TLS when sending emails.'),
 )
 
-FLAGS.AddBoolean(
+FLAGS.add_boolean(
     name='smtp_auth',
     default=False,
     help=('Whether to perform SMTP authentication.'),
 )
 
-FLAGS.AddString(
+FLAGS.add_string(
     name='smtp_login',
     default=None,
     help=('Optional explicit login to use when authenticating.\n'
           'None or empty means use the sender address.'),
 )
 
-FLAGS.AddString(
+FLAGS.add_string(
     name='smtp_password_env',
     default='SMTP_PASSWORD',
     help=('Name of the environment variable that contains the password.'),
@@ -76,12 +76,12 @@ class Error(Exception):
 def SendMail(
     subject,
     body,
-    sender=Default,
-    recipients=Default,
-    smtp_server=Default,
-    use_tls=Default,
-    login=Default,
-    password=Default,
+    sender=DEFAULT,
+    recipients=DEFAULT,
+    smtp_server=DEFAULT,
+    use_tls=DEFAULT,
+    login=DEFAULT,
+    password=DEFAULT,
 ):
   """Sends an email.
 
@@ -100,7 +100,7 @@ def SendMail(
         Default is to use --email-login
     password: Password, when using TLS.
   """
-  if smtp_server is Default:
+  if smtp_server is DEFAULT:
     smtp_server = FLAGS.smtp_server
   if (smtp_server is None) or (len(smtp_server) == 0):
     logging.debug('No default SMTP server configured')
@@ -108,13 +108,13 @@ def SendMail(
   (host, port) = smtp_server.split(':')
   port = int(port)
 
-  if sender is Default:
+  if sender is DEFAULT:
     sender = FLAGS.email_sender
   if (sender is None) or (len(sender) == 0):
     logging.debug('No default SMTP sender configured')
     return
 
-  if recipients is Default:
+  if recipients is DEFAULT:
     recipients = set()
     if FLAGS.email_recipients is not None:
       recipients.update(FLAGS.email_recipients.split(','))
@@ -138,13 +138,13 @@ def SendMail(
   logging.debug('SMTP handshake: %s:%d response is %r', host, port, reply)
 
   # Enable TLS if required:
-  if use_tls is Default:
+  if use_tls is DEFAULT:
     use_tls = FLAGS.smtp_use_tls
   if use_tls:
     server.starttls()
 
   # Proceed with authentication, if requested:
-  if login is Default:
+  if login is DEFAULT:
     if FLAGS.smtp_auth:
       login = FLAGS.smtp_login
       if (login is None) or (len(login) == 0):
@@ -152,7 +152,7 @@ def SendMail(
     else:
       login = None
   if (login is not None) and (len(login) > 0):
-    if password is Default:
+    if password is DEFAULT:
       password = os.environ[FLAGS.smtp_password_env]
     server.login(login, password)
 

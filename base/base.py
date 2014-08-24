@@ -61,6 +61,15 @@ class Undefined(object):
 UNDEFINED = Undefined()
 
 
+
+def deprecated(fun):
+    def wrapped(*args, **kwargs):
+        logging.warning("Deprecated use of function: %r", fun)
+        logging.debug("Deprecated use of %r:\n%s", fun, "".join(traceback.format_stack()))
+        return fun(*args, **kwargs)
+    return wrapped
+
+
 # --------------------------------------------------------------------------------------------------
 
 
@@ -720,10 +729,10 @@ class Flags(object):
         self.add(Flags.FloatFlag(name, **kwargs))
 
     # Deprecated
-    AddString = add_string
-    AddInteger = add_integer
-    AddBoolean = add_boolean
-    AddFloat = add_float
+    AddString = deprecated(add_string)
+    AddInteger = deprecated(add_integer)
+    AddBoolean = deprecated(add_boolean)
+    AddFloat = deprecated(add_float)
 
     def parse(self, args, config_file=None):
         """Parses the command-line arguments.
@@ -823,7 +832,7 @@ class Flags(object):
                 name,
                 flag.type,
                 flag.default,
-                add_margin(StripMargin(flag_help), ' ' * indent),
+                add_margin(strip_margin(flag_help), ' ' * indent),
             ))
 
         if self._parent is not None:
@@ -1291,15 +1300,6 @@ def run(main):
 
 
 # --------------------------------------------------------------------------------------------------
-
-
-def deprecated(fun):
-    def wrapped(*args, **kwargs):
-        logging.warning("Deprecated use of function: %r", fun)
-        logging.debug("Deprecated use of %r:\n%s", fun, "".join(traceback.format_stack()))
-        return fun(*args, **kwargs)
-    return wrapped
-
 
 # Deprecated - for compatibility only
 Default = DEFAULT

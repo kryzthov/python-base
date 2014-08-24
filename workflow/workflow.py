@@ -13,15 +13,15 @@ Usage:
         workflow = Workflow()
         task1 = Task(...)
         task2 = Task(...)
-        task1.RunsAfter(task2)
-        task2.RunsBefore(...)
+        task1.must_run_after(task2)
+        task2.must_run_before(...)
         ...
-        workflow.Build()
+        workflow.build()
 
     2. Workflow execution:
 
-        workflow.Process(...)
-        workflow.Wait()
+        workflow.process(...)
+        workflow.wait()
 """
 
 import abc

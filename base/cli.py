@@ -51,9 +51,9 @@ class Action(object, metaclass=abc.ABCMeta):
         """
 
     def __init__(
-            self,
-            parent_flags=None,
-            help_flag=HELP_FLAG.ADD_HANDLE,
+        self,
+        parent_flags=None,
+        help_flag=HELP_FLAG.ADD_HANDLE,
     ):
         """Initializes the action.
 
