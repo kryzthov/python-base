@@ -16,7 +16,7 @@ class TestBase(unittest.TestCase):
     """Tests for the base module."""
 
     def test_touch(self):
-        path = base.RandomAlphaNumWord(16)
+        path = base.random_alpha_num_word(16)
         try:
             self.assertFalse(os.path.exists(path))
             base.touch(path)
@@ -24,7 +24,7 @@ class TestBase(unittest.TestCase):
             base.touch(path)
             self.assertTrue(os.path.exists(path))
         finally:
-            os.remove(path)
+            base.remove(path)
 
     def test_un_camel_case(self):
         self.assertEqual('jira', base.un_camel_case('JIRA'))

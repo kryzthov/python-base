@@ -67,7 +67,7 @@ class CircularDependencyError(Error):
 
 
 # Task states:
-TaskState = base.MakeTuple('TaskState',
+TaskState = base.make_tuple('TaskState',
     # Task is being initialized:
     INIT     = 1,
 
@@ -293,7 +293,7 @@ class Task(object, metaclass=abc.ABCMeta):
                         type(self).run, self._state)
                 # A task status that is neither SUCCESS nor FAILURE is a programming
                 # error: program should not continue in such a scenario.
-                base.Exit()
+                base.shutdown()
             return self._state
         except:
             logging.error('Unhandled exception from Task.run().')
@@ -301,7 +301,7 @@ class Task(object, metaclass=abc.ABCMeta):
             # It is arguable whether an uncaught exception should cause the program
             # to stop. We current assume an uncaught exception is a programming error.
             # This could be made configurable via a flag.
-            base.Exit()
+            base.shutdown()
 
     def _task_success(self, task):
         """Processes the success of a task.
@@ -393,7 +393,7 @@ class Worker(object):
                 logging.error('Unhandled exception from Task.run(): task not completed')
                 # TODO: retry task?
                 traceback.print_exc()
-                base.Exit()
+                base.shutdown()
 
 
     def __str__(self):
@@ -746,7 +746,7 @@ class Workflow(object):
         self._done.set()
 
     # Template to dump this workflow as a Graphiv/Dot definition:
-    _DOT_TEMPLATE = base.StripMargin("""\
+    _DOT_TEMPLATE = base.strip_margin("""\
     |digraph Workflow {
     |%(nodes)s
     |%(deps)s
@@ -758,14 +758,14 @@ class Workflow(object):
         Returns:
             A Graphviz/Dot definition for this workflow.
         """
-        def MakeNode(task):
-            return ('  %s;' % base.MakeIdent(task.task_id))
+        def make_node(task):
+            return ('  %s;' % base.make_ident(task.task_id))
 
-        def MakeDep(dep):
-            return ('  %s -> %s;' % (base.MakeIdent(dep.after), base.MakeIdent(dep.before)))
+        def make_dep(dep):
+            return ('  %s -> %s;' % (base.make_ident(dep.after), base.make_ident(dep.before)))
 
-        nodes = sorted(map(MakeNode, self._tasks.values()))
-        deps = sorted(map(MakeDep, self._deps))
+        nodes = sorted(map(make_node, self._tasks.values()))
+        deps = sorted(map(make_dep, self._deps))
         return self._DOT_TEMPLATE % dict(
             nodes='\n'.join(nodes),
             deps='\n'.join(deps),
@@ -787,7 +787,7 @@ class Workflow(object):
         if make_task_label is None:
             make_task_label = self._get_task_label
 
-        def MakeNode(task):
+        def make_node(task):
             task_id = task.task_id
             if task.state == TaskState.FAILURE:
                 color = 'red'
@@ -799,13 +799,13 @@ class Workflow(object):
                 color = 'black'
 
             label = make_task_label(task)
-            return ('  %s [color="%s", label="%s"];' % (base.MakeIdent(task_id), color, label))
+            return ('  %s [color="%s", label="%s"];' % (base.make_ident(task_id), color, label))
 
-        def MakeDep(dep):
-            return ('  %s -> %s;' % (base.MakeIdent(dep.after), base.MakeIdent(dep.before)))
+        def make_dep(dep):
+            return ('  %s -> %s;' % (base.make_ident(dep.after), base.make_ident(dep.before)))
 
-        nodes = sorted(map(MakeNode, self._tasks.values()))
-        deps = sorted(map(MakeDep, self._deps))
+        nodes = sorted(map(make_node, self._tasks.values()))
+        deps = sorted(map(make_dep, self._deps))
         return self._DOT_TEMPLATE % dict(
             nodes='\n'.join(nodes),
             deps='\n'.join(deps),
@@ -830,13 +830,13 @@ class Workflow(object):
             elif task.end_time is None:
                 return '%s (start time: %s - elapsed: %s)' % (
                     task.task_id,
-                    base.Timestamp(task.start_time.timestamp()),
+                    base.timestamp(task.start_time.timestamp()),
                     datetime.datetime.now() - task.start_time)
             else:
                 return '%s (start time: %s - end time: %s - duration: %s)' % (
                     task.task_id,
-                    base.Timestamp(task.start_time.timestamp()),
-                    base.Timestamp(task.end_time.timestamp()),
+                    base.timestamp(task.start_time.timestamp()),
+                    base.timestamp(task.end_time.timestamp()),
                     task.end_time - task.start_time)
 
         successes = frozenset(map(format_task, successes))
@@ -969,7 +969,7 @@ class LocalFSPersistentTask(Task):
         status = super(LocalFSPersistentTask, self)._run()
         assert self.completed
         if status == TaskState.SUCCESS:
-            base.Touch(self._output_file_path)
+            base.touch(self._output_file_path)
         return status
 
 
@@ -1154,7 +1154,7 @@ class IOTask(Task):
 # ------------------------------------------------------------------------------
 
 
-def _MakeWorkflowMonitoringHandlerClass(monitor):
+def _make_workflow_monitoring_handler_class(monitor):
     class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             parsed = urllib.parse.urlparse(self.path)
@@ -1194,10 +1194,10 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
     """Simple HTTP server to monitor a workflow."""
 
     def __init__(
-            self,
-            interface='0.0.0.0',
-            port=0,
-            workflow=None,
+        self,
+        interface='0.0.0.0',
+        port=0,
+        workflow=None,
     ):
         """Creates a new HTTP endpoint to monitor a workflow.
 
@@ -1207,32 +1207,31 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
             workflow: Optional workflow to monitor.
                     Can be set or updated later with SetWorkflow().
         """
-        super(WorkflowHTTPMonitor, self).__init__(
-                server_address=(interface, port),
-                RequestHandlerClass=_MakeWorkflowMonitoringHandlerClass(self),
+        super().__init__(
+            server_address=(interface, port),
+            RequestHandlerClass=_make_workflow_monitoring_handler_class(self),
         )
         self._interface = interface
-        self._thread = threading.Thread(target=self._ServeThread, daemon=True)
+        self._thread = threading.Thread(target=self._serve_thread, daemon=True)
         self._workflow = workflow
 
     @property
     def workflow(self):
         return self._workflow
 
-    def SetWorkflow(self, workflow):
+    def set_workflow(self, workflow):
         self._workflow = workflow
 
-    def Start(self):
+    def start(self):
         self._thread.start()
-        logging.info('Workflow monitor started on http://%s:%s',
-                 self.server_name, self.server_port)
+        logging.info('Workflow monitor started on http://%s:%s', self.server_name, self.server_port)
 
-    def Stop(self):
+    def stop(self):
         self.shutdown()
         self._thread.join()
         self.server_close()
 
-    def _ServeThread(self):
+    def _serve_thread(self):
         self.serve_forever()
 
 
@@ -1247,21 +1246,19 @@ def diff_workflow(flow1, flow2):
     Args:
         flow1, flow2: visualize the differences between these workflows.
     """
-    nodes = frozenset.union(
-            frozenset(flow1.tasks.keys()),
-            frozenset(flow2.tasks.keys()))
+    nodes = frozenset.union(frozenset(flow1.tasks.keys()), frozenset(flow2.tasks.keys()))
     deps = frozenset.union(flow1.deps, flow2.deps)
 
-    def MakeNode(task_id):
+    def make_node(task_id):
         if task_id not in flow1.tasks:
             color = 'blue'
         elif task_id not in flow2.tasks:
             color = 'red'
         else:
             color = 'black'
-        return '  %s [color="%s"];' % (base.MakeIdent(task_id), color)
+        return '  %s [color="%s"];' % (base.make_ident(task_id), color)
 
-    def MakeDep(dep):
+    def make_dep(dep):
         if dep not in flow1.deps:
             color = 'blue'
         elif dep not in flow2.deps:
@@ -1269,17 +1266,17 @@ def diff_workflow(flow1, flow2):
         else:
             color = 'black'
         return '  %s -> %s [color="%s"];' \
-                % (base.MakeIdent(dep.after), base.MakeIdent(dep.before), color)
+                % (base.make_ident(dep.after), base.make_ident(dep.before), color)
 
-    _DOT_TEMPLATE = base.StripMargin("""\
+    _DOT_TEMPLATE = base.strip_margin("""\
     |digraph Workflow {
     |%(nodes)s
     |%(deps)s
     |}""")
 
 
-    nodes = sorted(map(MakeNode, nodes))
-    deps = sorted(map(MakeDep, deps))
+    nodes = sorted(map(make_node, nodes))
+    deps = sorted(map(make_dep, deps))
     dot_source = _DOT_TEMPLATE % dict(
         nodes='\n'.join(nodes),
         deps='\n'.join(deps),

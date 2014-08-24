@@ -40,6 +40,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 
 
 class Default(object):
@@ -1294,7 +1295,8 @@ def run(main):
 
 def deprecated(fun):
     def wrapped(*args, **kwargs):
-        logging.warn("Deprecated use of function: %r", fun)
+        logging.warning("Deprecated use of function: %r", fun)
+        logging.debug("Deprecated use of %r:\n%s", fun, "".join(traceback.format_stack()))
         return fun(*args, **kwargs)
     return wrapped
 
@@ -1302,43 +1304,43 @@ def deprecated(fun):
 # Deprecated - for compatibility only
 Default = DEFAULT
 Undefined = UNDEFINED
-NowMS = now_ms
-NowNS = now_ns
-NowDateTime = now_date_time
-Timestamp = timestamp
-JsonDecode = json_decode
-JsonEncode = json_encode
-Truth = truth
-RandomAlphaNumChar = random_alpha_num_char
-RandomAlphaNumWord = random_alpha_num_word
-StripPrefix = strip_prefix
-StripOptionalPrefix = strip_optional_prefix
-StripSuffix = strip_suffix
-StripOptionalSuffix = strip_optional_suffix
-StripMargin = strip_margin
-AddMargin = add_margin
-WrapText = wrap_text
-CamelCase = camel_case
-UnCamelCase = un_camel_case
-Truncate = truncate
-MakeIdent = make_ident
-SetProgramName = set_program_name
-GetProgramName = get_program_name
-ShellCommandOutput = shell_command_output
-MakeDir = make_dir
-Remove = remove
-Touch = touch
-Exit = shutdown
-ListJavaProcesses = list_java_processes
-ProcessExists = process_exists
-MakeTuple = make_tuple
-ParseLogLevelFlag = parse_log_level_flag
-Synchronized = synchronized
-Memoize = memoize
-ParseTemplate = parse_template
-InputTemplate = input_template
-SetupLogging = setup_logging
-Run = run
+NowMS = deprecated(now_ms)
+NowNS = deprecated(now_ns)
+NowDateTime = deprecated(now_date_time)
+Timestamp = deprecated(timestamp)
+JsonDecode = deprecated(json_decode)
+JsonEncode = deprecated(json_encode)
+Truth = deprecated(truth)
+RandomAlphaNumChar = deprecated(random_alpha_num_char)
+RandomAlphaNumWord = deprecated(random_alpha_num_word)
+StripPrefix = deprecated(strip_prefix)
+StripOptionalPrefix = deprecated(strip_optional_prefix)
+StripSuffix = deprecated(strip_suffix)
+StripOptionalSuffix = deprecated(strip_optional_suffix)
+StripMargin = deprecated(strip_margin)
+AddMargin = deprecated(add_margin)
+WrapText = deprecated(wrap_text)
+CamelCase = deprecated(camel_case)
+UnCamelCase = deprecated(un_camel_case)
+Truncate = deprecated(truncate)
+MakeIdent = deprecated(make_ident)
+SetProgramName = deprecated(set_program_name)
+GetProgramName = deprecated(get_program_name)
+ShellCommandOutput = deprecated(shell_command_output)
+MakeDir = deprecated(make_dir)
+Remove = deprecated(remove)
+Touch = deprecated(touch)
+Exit = deprecated(shutdown)
+ListJavaProcesses = deprecated(list_java_processes)
+ProcessExists = deprecated(process_exists)
+MakeTuple = deprecated(make_tuple)
+ParseLogLevelFlag = deprecated(parse_log_level_flag)
+Synchronized = deprecated(synchronized)
+Memoize = deprecated(memoize)
+ParseTemplate = deprecated(parse_template)
+InputTemplate = deprecated(input_template)
+SetupLogging = deprecated(setup_logging)
+Run = deprecated(run)
 ExitCode = EXIT_CODE
 LogLevel = LOG_LEVEL
 HttpMethod = HTTP_METHOD
@@ -1351,4 +1353,3 @@ Terminal = TERMINAL
 
 if __name__ == '__main__':
     raise Error('%r cannot be used as a standalone script.' % sys.argv[0])
-

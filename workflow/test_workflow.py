@@ -208,7 +208,7 @@ class TestWorkflow(unittest.TestCase):
         logging.debug('SVG source:\n%s', svg_source)
 
         server = workflow.WorkflowHTTPMonitor(interface='127.0.0.1', port=0)
-        server.Start()
+        server.start()
         try:
             flow1.process()
 
@@ -219,7 +219,7 @@ class TestWorkflow(unittest.TestCase):
                 response = conn.getresponse()
                 self.assertEqual(404, response.getcode())
 
-                server.SetWorkflow(flow1)
+                server.set_workflow(flow1)
 
                 conn.request(method='GET', url='/svg')
                 response = conn.getresponse()
@@ -230,7 +230,7 @@ class TestWorkflow(unittest.TestCase):
                 conn.close()
 
         finally:
-            server.Stop()
+            server.stop()
 
     def test_dump_state_as_table(self):
         flow1 = workflow.Workflow()
@@ -245,8 +245,8 @@ class TestWorkflow(unittest.TestCase):
         logging.debug('Workflow table:\n%s', svg_source)
 
         server = workflow.WorkflowHTTPMonitor(interface='127.0.0.1', port=0)
-        server.Start()
-        server.SetWorkflow(flow1)
+        server.start()
+        server.set_workflow(flow1)
         try:
             flow1.process()
 
@@ -265,7 +265,7 @@ class TestWorkflow(unittest.TestCase):
                 conn.close()
 
         finally:
-            server.Stop()
+            server.stop()
 
     def disabled_test_workflow_diff(self):
         flow1 = workflow.Workflow()
