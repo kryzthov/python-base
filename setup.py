@@ -23,35 +23,36 @@ import shutil
 import sys
 
 from setuptools import setup
+from setuptools import find_packages
 
 
-def Main():
-  assert (sys.version_info[0] >= 3), \
-      ('Python version >= 3 required, got %r' % sys.version_info)
-  base_dir = os.path.dirname(os.path.abspath(__file__))
+def main():
+    assert (sys.version_info[0] >= 3), \
+            ('Python version >= 3 required, got %r' % sys.version_info)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
-  setup(
-    name = 'python-base',
-    version = '1.1.0-SNAPSHOT',
-    packages = ['base', 'workflow'],
-    package_dir = {
-        'base': 'base',
-        'workflow': 'workflow',
-    },
-    script_name = 'setup.py',
-    scripts = [
-        'scripts/daemonize.py',
-    ],
+    setup(
+        name = 'python-base',
+        version = '1.1.0-SNAPSHOT',
+        packages = find_packages('src/main/python'),
+        package_dir = {
+            'base': 'src/main/python/base',
+            'workflow': 'src/main/python/workflow',
+        },
+        script_name = 'setup.py',
+        scripts = [
+            'scripts/daemonize.py',
+        ],
 
-    # metadata for upload to PyPI
-    author = 'Christophe Taton',
-    author_email = 'christophe.taton@gmail.com',
-    description = 'General purpose library for Python.',
-    license = 'Apache License 2.0',
-    keywords = 'python base flags tools workflow',
-    url = 'https://github.com/kryzthov/python-base',
-  )
+        # metadata for upload to PyPI
+        author = 'Christophe Taton',
+        author_email = 'christophe.taton@gmail.com',
+        description = 'General purpose library for Python.',
+        license = 'Apache License 2.0',
+        keywords = 'python base flags tools workflow',
+        url = 'https://github.com/kryzthov/python-base',
+    )
 
 
 if __name__ == '__main__':
-  Main()
+    main()
