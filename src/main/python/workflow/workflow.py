@@ -62,7 +62,7 @@ class CircularDependencyError(Error):
     pass
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 # Task abstract base class:
 
 
@@ -350,7 +350,7 @@ class Task(object, metaclass=abc.ABCMeta):
         return self.task_id
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 
 class Worker(object):
@@ -400,7 +400,7 @@ class Worker(object):
         return 'Worker(%s)' % self._worker_id
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 
 # Representation of a dependency:
@@ -801,25 +801,47 @@ class Workflow(object):
         def make_node(task):
             task_id = task.task_id
             if task.state == TaskState.FAILURE:
-                color = 'red'
+                color = "black"
+                fillcolor = "red"
+                fontcolor = "black"
             elif task.state == TaskState.SUCCESS:
-                color = 'blue'
+                color = "black"
+                fillcolor = "green"
+                fontcolor = "white"
             elif task in self._running:
-                color = 'green'
+                color = "black"
+                fillcolor = "blue"
+                fontcolor = "white"
             else:
-                color = 'black'
+                color = "black"
+                fillcolor = "white"
+                fontcolor = "black"
 
             label = make_task_label(task)
-            return ('  %s [color="%s", label="%s"];' % (base.make_ident(task_id), color, label))
+            return ("""  %s [color="%s", fillcolor="%s", fontcolor="%s", style="filled", label="%s"];"""
+                    % (base.make_ident(task_id), color, fillcolor, fontcolor, label))
 
-        def make_dep(dep):
-            return ('  %s -> %s;' % (base.make_ident(dep.after), base.make_ident(dep.before)))
+        # Map: source -> set of dependencies
+        dep_map = dict()
 
-        nodes = sorted(map(make_node, self._tasks.values()))
-        deps = sorted(map(make_dep, self._deps))
+        # Seed the dependency map with all tasks:
+        for task in self._tasks.values():
+            dep_map[base.make_ident(task.task_id)] = set()
+
+        # Add dependencies:
+        for dep in self._deps:
+            dep_map[base.make_ident(dep.after)].add(base.make_ident(dep.before))
+
+        dep_map = _minimize_dep_map(_maximize_dep_map(dep_map))
+
+        deps = []
+        for src_target, dest_deps in dep_map.items():
+            for dest_dep in dest_deps:
+                deps.append('  %s -> %s;' % (src_target, dest_dep))
+
         return self._DOT_TEMPLATE % dict(
-            nodes='\n'.join(nodes),
-            deps='\n'.join(deps),
+            nodes='\n'.join(sorted(map(make_node, self._tasks.values()))),
+            deps='\n'.join(sorted(deps)),
         )
 
     def dump_state_as_table(self):
@@ -955,7 +977,7 @@ class Workflow(object):
             task._runs_before.difference_update(remove_ids)
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 
 class LocalFSPersistentTask(Task):
@@ -984,7 +1006,7 @@ class LocalFSPersistentTask(Task):
         return status
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 
 class IOTask(Task):
@@ -1162,7 +1184,7 @@ class IOTask(Task):
         return task_run_id
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 
 def _make_workflow_monitoring_handler_class(monitor):
@@ -1246,7 +1268,7 @@ class WorkflowHTTPMonitor(base.MultiThreadedHTTPServer):
         self.serve_forever()
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 
 def diff_workflow(flow1, flow2):
@@ -1299,7 +1321,7 @@ def diff_workflow(flow1, flow2):
         os.system('xdot %s' % f.name)
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
 
 
 def get_upstream_tasks(flow, tasks):
@@ -1348,7 +1370,76 @@ def get_downstream_tasks(flow, tasks):
     return tasks
 
 
-# ------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------
+
+
+def _maximize_dep_map(dep_map):
+    """Materialize all transitive dependencies as direct dependencies.
+
+    Args:
+        dep_map: Original dependency map.
+            Map: source -> set of dependencies
+    Returns:
+        Maximized dependency map.
+    """
+    dep_map = dict(dep_map)  # Prevent mutating the original dependency map
+
+    # Map: source -> maximized set of dependencies
+    transitive = dict()
+
+    # Seed the transitive map with nodes that have no dependencies:
+    for dests in dep_map.values():
+        for dest in dests:
+            if dest not in dep_map:
+                transitive[dest] = frozenset()
+
+    while len(dep_map) > 0:
+        # Set of sources that are maximized in this iteration:
+        done = set()
+
+        for src, dests in dep_map.items():
+            # Can we compute the transitive dependencies of src now?
+            if len(dests.difference(transitive.keys())) > 0:
+                # No, skip src for this iteration...
+                continue
+
+            # Yes, compute src's transitive dependencies:
+            done.add(src)
+
+            full_dests = set(dests)
+            for dest in dests:
+                full_dests.update(transitive[dest])
+
+            transitive[src] = full_dests
+
+        assert not ((len(done) == 0) and (len(dep_map) > 0)), ("Invalid dependency map?")
+
+        for src in done:
+            del dep_map[src]
+
+    return transitive
+
+
+def _minimize_dep_map(dep_map):
+    """Removes all redundant direct dependencies.
+
+    Args:
+        dep_map: Original dependency map.
+    Returns:
+        Minimized dependency map, with redundant direct dependencies removed.
+    """
+    minimized = dict()
+
+    for src, dests in dep_map.items():
+        min_dests = set(dests)
+        for dest in dests:
+            min_dests.difference_update(dep_map[dest])
+        minimized[src] = min_dests
+
+    return minimized
+
+
+# --------------------------------------------------------------------------------------------------
 
 
 if __name__ == '__main__':
