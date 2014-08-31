@@ -449,6 +449,17 @@ class Workflow(object):
         self._runnable_queue = queue.Queue()
 
     @property
+    def name(self):
+        """Returns: the name of this workflow."""
+        return self._name
+
+    def __str__(self):
+        return "Workflow(name=%s)" % self._name
+
+    def __repr__(self):
+        return str(self)
+
+    @property
     def tasks(self):
         """Returns: the map: task ID -> Task."""
         return self._tasks

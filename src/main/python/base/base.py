@@ -665,7 +665,7 @@ class Flags(object):
             if argument is None:
                 self._value = True
             else:
-                self._value = Truth(argument)
+                self._value = truth(argument)
 
     # ----------------------------------------------------------------------------------------------
 
