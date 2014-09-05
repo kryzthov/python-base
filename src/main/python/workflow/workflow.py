@@ -810,8 +810,12 @@ class Workflow(object):
                 fontcolor = "white"
             elif task in self._running:
                 color = "black"
-                fillcolor = "blue"
-                fontcolor = "white"
+                fillcolor = "yellow"
+                fontcolor = "black"
+            elif task in self._runnable:
+                color = "black"
+                fillcolor = "grey"
+                fontcolor = "black"
             else:
                 color = "black"
                 fillcolor = "white"
