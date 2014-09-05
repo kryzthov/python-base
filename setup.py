@@ -33,7 +33,7 @@ def main():
 
     setup(
         name = 'python-base',
-        version = '1.1.3-SNAPSHOT',
+        version = '1.1.4-SNAPSHOT',
         packages = find_packages('src/main/python'),
         package_dir = {
             'base': 'src/main/python/base',
