@@ -246,7 +246,7 @@ class Command(object):
                     break
                 output.write(line)
                 line = line[:-1]  # strip the end of line
-                logging.info("Command #%d: stdout: %s", self._command_id, line.decode())
+                logging.debug("Command #%d: stdout: %s", self._command_id, line.decode())
 
         logging.log(LOG_LEVEL.DEBUG_VERBOSE, "Command #%d: output stream ended", self._command_id)
 
@@ -259,7 +259,7 @@ class Command(object):
                     break
                 error.write(line)
                 line = line[:-1]  # strip the end of line
-                logging.info("Command #%d: stderr: %s", self._command_id, line.decode())
+                logging.debug("Command #%d: stderr: %s", self._command_id, line.decode())
 
         logging.log(LOG_LEVEL.DEBUG_VERBOSE, "Command #%d: error stream ended", self._command_id)
 
