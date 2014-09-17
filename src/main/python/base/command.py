@@ -107,7 +107,6 @@ class Command(object):
         name = os.path.basename(self._args[0])
         timestamp = base.timestamp()
 
-        self._input_path = "/dev/null"
         self._output_path = os.path.join(log_dir, "%s.%s.%d.out" % (name, timestamp, os.getpid()))
         self._error_path = os.path.join(log_dir, "%s.%s.%d.err" % (name, timestamp, os.getpid()))
 
@@ -129,29 +128,36 @@ class Command(object):
         if logging.getLogger().isEnabledFor(LOG_LEVEL.DEBUG_VERBOSE):
             logging.log(
                 LOG_LEVEL.DEBUG_VERBOSE,
-                ("Running command #%d in %r:\n"
+                ("Running command #%d in %r (output=%r, error=%r):\n"
                  "%s\n"
-                 "With environment:\n"
+                 "with environment:\n"
                  "%s"),
-                self._command_id, self._work_dir,
+                self._command_id, self._work_dir, self._output_path, self._error_path,
                 " \\\n\t".join(map(repr, self._args)),
                 "\n".join(map(lambda kv: "\t%r: %r" % kv, sorted(self._env.items()))),
             )
         else:
-            logging.debug("Running command #%d in %r:\n%s",
-                          self._command_id, self._work_dir, " \\\n\t".join(map(repr, self._args)))
+            logging.debug(
+                "Running command #%d in %r (output=%r, error=%s):\n"
+                "%s",
+                self._command_id, self._work_dir, self._output_path, self._error_path,
+                " \\\n\t".join(map(repr, self._args)))
 
-        with open(self._input_path, mode="rb") as input_file, \
-             open(self._output_path, mode="wb") as output_file, \
-             open(self._error_path, mode="wb") as error_file:
-            self._process = subprocess.Popen(
-                args=self._args,
-                stdin=input_file,
-                stdout=output_file,
-                stderr=error_file,
-                cwd=self._work_dir,
-                env=self._env,
-            )
+        self._process = subprocess.Popen(
+            args=self._args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=self._work_dir,
+            env=self._env,
+            bufsize=1,  # line buffering
+        )
+
+        self._output_thread = threading.Thread(target=self._handle_output_stream)
+        self._output_thread.start()
+        self._error_thread = threading.Thread(target=self._handle_error_stream)
+        self._error_thread.start()
+
         if wait_for:
             self.wait_for()
 
@@ -167,6 +173,9 @@ class Command(object):
         assert (self._output_bytes is None), "Command has already completed."
 
         self._process.wait(timeout=timeout)
+
+        self._output_thread.join()
+        self._error_thread.join()
 
         with open(self._output_path, mode="rb") as file:
             self._output_bytes = file.read()
@@ -197,13 +206,7 @@ class Command(object):
                 RULER,
             )
         else:
-            logging.debug(
-                ("Command #%d exited with code: %d\n"
-                 " - output: %r\n"
-                 " - error:  %r"),
-                self._command_id, self.exit_code,
-                self.output_text,
-                self.error_text)
+            logging.debug("Command #%d exited with code: %d", self._command_id, self.exit_code)
 
         os.remove(self._output_path)
         os.remove(self._error_path)
@@ -233,6 +236,32 @@ class Command(object):
     Start = start
     WaitFor = wait_for
     Kill = kill
+
+    def _handle_output_stream(self):
+        """Processes the output stream of the subprocess."""
+        with open(self._output_path, mode="wb") as output:
+            while True:
+                line = self._process.stdout.readline()
+                if len(line) == 0:
+                    break
+                output.write(line)
+                line = line[:-1]  # strip the end of line
+                logging.info("Command #%d: stdout: %s", self._command_id, line.decode())
+
+        logging.log(LOG_LEVEL.DEBUG_VERBOSE, "Command #%d: output stream ended", self._command_id)
+
+    def _handle_error_stream(self):
+        """Processes the error stream of the subprocess."""
+        with open(self._error_path, mode="wb") as error:
+            while True:
+                line = self._process.stderr.readline()
+                if len(line) == 0:
+                    break
+                error.write(line)
+                line = line[:-1]  # strip the end of line
+                logging.info("Command #%d: stderr: %s", self._command_id, line.decode())
+
+        logging.log(LOG_LEVEL.DEBUG_VERBOSE, "Command #%d: error stream ended", self._command_id)
 
     @property
     def output_bytes(self):

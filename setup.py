@@ -26,14 +26,24 @@ from setuptools import setup
 from setuptools import find_packages
 
 
+
+def get_version_string():
+    root_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    version_path=os.path.join(root_dir, "src", "main", "python", "base", "VERSION")
+    with open(version_path, mode="rt", encoding="UTF-8") as file:
+        return file.read().strip()
+
+
 def main():
     assert (sys.version_info[0] >= 3), \
             ('Python version >= 3 required, got %r' % sys.version_info)
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
+    version = get_version_string()
+
     setup(
         name = 'python-base',
-        version = '1.1.4-SNAPSHOT',
+        version = version,
         packages = find_packages('src/main/python'),
         package_dir = {
             'base': 'src/main/python/base',
@@ -43,6 +53,10 @@ def main():
         scripts = [
             'scripts/daemonize.py',
         ],
+
+        package_data = {
+            "base": ["VERSION"],
+        },
 
         # metadata for upload to PyPI
         author = 'Christophe Taton',
