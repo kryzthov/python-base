@@ -248,6 +248,7 @@ class Command(object):
                 line = line[:-1]  # strip the end of line
                 logging.debug("Command #%d: stdout: %s", self._command_id, line.decode())
 
+        self._process.stdout.close()
         logging.log(LOG_LEVEL.DEBUG_VERBOSE, "Command #%d: output stream ended", self._command_id)
 
     def _handle_error_stream(self):
@@ -261,6 +262,7 @@ class Command(object):
                 line = line[:-1]  # strip the end of line
                 logging.debug("Command #%d: stderr: %s", self._command_id, line.decode())
 
+        self._process.stderr.close()
         logging.log(LOG_LEVEL.DEBUG_VERBOSE, "Command #%d: error stream ended", self._command_id)
 
     @property
