@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# -*- mode: python -*-
+# -*- coding: utf-8; mode: python -*-
 
 """Wrapper for shell commands."""
 
@@ -68,6 +67,8 @@ class Command(object):
         work_dir=None,
         env=None,
         log_dir=None,
+        direct_log=False,
+        collect_log=True,
         start=True,
         wait_for=True
     ):
@@ -88,6 +89,9 @@ class Command(object):
             env: Optional environment variables for the subprocess, or None.
             log_dir: Optional directory where to write files capturing the command output streams.
                 Defaults to the log directory (FLAGS.log_dir).
+            direct_log: When set, the command's output and error streams are directly written
+                to the log files, instead of being piped through this process.
+            collect_log: When set, log files are collected in memory and removed.
             start: Whether to start running the command right away.
             wait_for: Whether to wait for the command to complete.
         Raises:
@@ -107,6 +111,8 @@ class Command(object):
         name = os.path.basename(self._args[0])
         timestamp = base.timestamp()
 
+        self._direct_log = direct_log
+        self._collect_log = collect_log
         self._output_path = os.path.join(log_dir, "%s.%s.%d.out" % (name, timestamp, os.getpid()))
         self._error_path = os.path.join(log_dir, "%s.%s.%d.err" % (name, timestamp, os.getpid()))
 
@@ -143,20 +149,39 @@ class Command(object):
                 self._command_id, self._work_dir, self._output_path, self._error_path,
                 " \\\n\t".join(map(repr, self._args)))
 
+        if self._direct_log:
+            stdout = os.open(
+                path=self._output_path,
+                flags=os.O_CREAT | os.O_WRONLY,
+                mode=0o400,
+            )
+            stderr = os.open(
+                path=self._error_path,
+                flags=os.O_CREAT | os.O_WRONLY,
+                mode=0o400,
+            )
+        else:
+            stdout = subprocess.PIPE
+            stderr = subprocess.PIPE
+
         self._process = subprocess.Popen(
             args=self._args,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=stdout,
+            stderr=stderr,
             cwd=self._work_dir,
             env=self._env,
             bufsize=1,  # line buffering
         )
 
-        self._output_thread = threading.Thread(target=self._handle_output_stream)
-        self._output_thread.start()
-        self._error_thread = threading.Thread(target=self._handle_error_stream)
-        self._error_thread.start()
+        if self._direct_log:
+            os.close(stdout)
+            os.close(stderr)
+        else:
+            self._output_thread = threading.Thread(target=self._handle_output_stream)
+            self._output_thread.start()
+            self._error_thread = threading.Thread(target=self._handle_error_stream)
+            self._error_thread.start()
 
         if wait_for:
             self.wait_for()
@@ -170,17 +195,23 @@ class Command(object):
             TimeoutExpired: if the timeout is reached.
         """
         assert (self._process is not None), "Command has not been started."
-        assert (self._output_bytes is None), "Command has already completed."
+        assert (self.exit_code is None), "Command has already completed."
 
         self._process.wait(timeout=timeout)
 
-        self._output_thread.join()
-        self._error_thread.join()
+        if not self._direct_log:
+            self._output_thread.join()
+            self._error_thread.join()
 
-        with open(self._output_path, mode="rb") as file:
-            self._output_bytes = file.read()
-        with open(self._error_path, mode="rb") as file:
-            self._error_bytes = file.read()
+        if self._collect_log:
+            with open(self._output_path, mode="rb") as file:
+                self._output_bytes = file.read()
+            with open(self._error_path, mode="rb") as file:
+                self._error_bytes = file.read()
+            os.remove(self._output_path)
+            os.remove(self._error_path)
+            self._output_path = None
+            self._error_path = None
 
         if logging.getLogger().isEnabledFor(LOG_LEVEL.DEBUG_VERBOSE):
             logging.log(
@@ -207,9 +238,6 @@ class Command(object):
             )
         else:
             logging.debug("Command #%d exited with code: %d", self._command_id, self.exit_code)
-
-        os.remove(self._output_path)
-        os.remove(self._error_path)
 
         if ((self._required_exit_code is not None)
                 and (self.exit_code != self._required_exit_code)):
@@ -266,10 +294,19 @@ class Command(object):
         logging.log(LOG_LEVEL.DEBUG_VERBOSE, "Command #%d: error stream ended", self._command_id)
 
     @property
+    def output_path(self):
+        """Returns: the path of the file the output stream is written to."""
+        return self._output_path
+
+    @property
     def output_bytes(self):
         """Returns: the command output stream as an array of bytes."""
-        assert (self._output_bytes is not None), "Command has not terminated."
-        return self._output_bytes
+        assert (self.exit_code is not None), "Command has not terminated."
+        if self._collect_log:
+            return self._output_bytes
+        else:
+            with open(self._output_path, mode="rb") as file:
+                return file.read()
 
     @property
     def output_text(self):
@@ -282,10 +319,19 @@ class Command(object):
         return self.output_text.split("\n")
 
     @property
+    def error_path(self):
+        """Returns: the path of the file the error stream is written to."""
+        return self._error_path
+
+    @property
     def error_bytes(self):
         """Returns: the command error stream as an array of bytes."""
-        assert (self._error_bytes is not None), "Command has not terminated."
-        return self._error_bytes
+        assert (self.exit_code is not None), "Command has not terminated."
+        if self._collect_log:
+            return self._error_bytes
+        else:
+            with open(self._error_path, mode="rb") as file:
+                return file.read()
 
     @property
     def error_text(self):

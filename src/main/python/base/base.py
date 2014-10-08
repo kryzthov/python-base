@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# -*- mode: python -*-
+# -*- coding: utf-8; mode: python -*-
 
 """Shared base utilities for Python applications.
 
@@ -534,6 +533,19 @@ def process_exists(pid):
         return False
 
 
+def parse_host_port(text):
+    """Parses a host:port specification into a tuple (host, port).
+
+    Args:
+        text: "host:port" specification.
+    Returns:
+        A pair (host, port). Port is an integer.
+    """
+    (host, port) = text.split(":", 1)
+    port = int(port)
+    return (host, port)
+
+
 # --------------------------------------------------------------------------------------------------
 
 
@@ -895,7 +907,7 @@ def parse_log_level_flag(level):
     Returns:
         Logging level (integer).
     """
-    log_level = getattr(LogLevel, level.upper(), None)
+    log_level = getattr(LogLevel, level.upper().replace("-", "_"), None)
     if type(log_level) == int:
         return log_level
 
@@ -908,26 +920,26 @@ def parse_log_level_flag(level):
 
 
 FLAGS.add_string(
-    name='log_level',
+    name='log-level',
     default='DEBUG',
     help=('Master log level (integer or level name).\n'
           'Overrides specific logging levels.'),
 )
 
 FLAGS.add_string(
-    name='log_console_level',
+    name='log-console-level',
     default='INFO',
     help='Filter log statements sent to the console (integer or level name).',
 )
 
 FLAGS.add_string(
-    name='log_file_level',
+    name='log-file-level',
     default='ALL',
     help='Filter log statements sent to the log file (integer or level name).',
 )
 
 FLAGS.add_string(
-    name='log_dir',
+    name='log-dir',
     default=None,
     help='Directory where to write logs.',
 )

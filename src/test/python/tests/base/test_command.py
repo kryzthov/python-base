@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# -*- mode: python -*-
+# -*- coding: utf-8; mode: python -*-
 
 """Tests for module base.base"""
 
 import logging
 import os
 import sys
+import tempfile
 import unittest
 
 from base import base
@@ -25,6 +25,37 @@ class TestCommand(unittest.TestCase):
 
     def test_args_list(self):
         cmd = command.Command(args=['false'], exit_code=1)
+
+    def test_collect_log(self):
+        cmd = command.Command(
+            args=['bash', '-c', 'echo -n Hello'],
+            exit_code=0,
+        )
+        self.assertEqual("Hello", cmd.output_text)
+        self.assertEqual("", cmd.error_text)
+
+    def test_direct_log(self):
+        cmd = command.Command(
+            args=['bash', '-c', 'echo -n Hello'],
+            direct_log=True,
+            exit_code=0,
+        )
+        self.assertEqual("Hello", cmd.output_text)
+        self.assertEqual("", cmd.error_text)
+
+    def test_no_collect_log(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            logging.debug("Using temporary directory %r", temp_dir)
+            cmd = command.Command(
+                args=['bash', '-c', 'echo -n Hello'],
+                log_dir=temp_dir,
+                collect_log=False,
+                exit_code=0,
+            )
+            self.assertEqual("Hello", cmd.output_text)
+            self.assertEqual("", cmd.error_text)
+            self.assertEqual(temp_dir, os.path.dirname(cmd.output_path))
+            self.assertEqual(temp_dir, os.path.dirname(cmd.error_path))
 
 
 def main(args):
