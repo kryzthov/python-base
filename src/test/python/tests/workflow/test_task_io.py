@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# -*- mode: python -*-
+# -*- coding: utf-8; mode: python -*-
 
 """Unit-tests for task I/O."""
 
@@ -16,6 +15,9 @@ import unittest
 from base import base
 
 from workflow import workflow
+
+
+# --------------------------------------------------------------------------------------------------
 
 
 class Task1(workflow.IOTask):
@@ -34,24 +36,73 @@ class Task2(workflow.IOTask):
         return self.SUCCESS
 
 
+# --------------------------------------------------------------------------------------------------
+
+
 class TestWorkflow(unittest.TestCase):
     def test_task_io(self):
+        try:
+            flow = workflow.Workflow()
+            task1 = Task1(workflow=flow, task_id='task1')
+            task2 = Task2(workflow=flow, task_id='task2')
+
+            task2.bind_input_to_task_output('task1', task1)
+
+            flow.build()
+            flow.process(nworkers=10)
+
+            self.assertEqual(workflow.TaskState.SUCCESS, task1.state)
+            self.assertEqual(workflow.TaskState.SUCCESS, task2.state)
+        finally:
+            os.remove(task1.get_task_run_id())
+            os.remove(task2.get_task_run_id())
+
+    def test_should_task_run(self):
+        class TestTask(workflow.IOTask):
+            def __init__(self, should_task_run=True, **kwargs):
+                super().__init__(**kwargs)
+                self._should_counter = 0
+                self._run_counter = 0
+                self._should_task_run = should_task_run
+
+            def should_task_run(self, task_run_id, output, **inputs):
+                self._should_counter += 1
+                return self._should_task_run
+
+            def run_with_io(self, output, **inputs):
+                self._run_counter += 1
+                output.time = time.time()
+                return self.SUCCESS
+
         flow = workflow.Workflow()
-        task1 = Task1(workflow=flow, task_id='task1')
-        task2 = Task2(workflow=flow, task_id='task2')
-
-        task2.bind_input_to_task_output('task1', task1)
-
+        task = TestTask(workflow=flow, task_id="TestTask")
         flow.build()
-        flow.process(nworkers=10)
+        flow.process()
 
-        self.assertEqual(workflow.TaskState.SUCCESS, task1.state)
-        self.assertEqual(workflow.TaskState.SUCCESS, task2.state)
+        self.assertEqual(0, task._should_counter)
+        self.assertEqual(1, task._run_counter)
 
-        print(flow.dump_as_dot())
+        flow = workflow.Workflow()
+        task = TestTask(workflow=flow, task_id="TestTask", should_task_run=True)
+        flow.build()
+        flow.process()
+
+        self.assertEqual(1, task._should_counter)
+        self.assertEqual(1, task._run_counter)
+
+        flow = workflow.Workflow()
+        task = TestTask(workflow=flow, task_id="TestTask", should_task_run=False)
+        flow.build()
+        flow.process()
+
+        self.assertEqual(1, task._should_counter)
+        self.assertEqual(0, task._run_counter)
+
+        os.remove(task.get_task_run_id())
 
 
-# ------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------------------------------
 
 
 def main(args):

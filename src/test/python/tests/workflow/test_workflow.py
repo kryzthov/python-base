@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# -*- mode: python -*-
+# -*- coding: utf-8; mode: python -*-
 
 """Unit-tests for Workflow and Task."""
 

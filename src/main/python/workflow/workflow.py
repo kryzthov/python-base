@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# -*- mode: python -*-
+# -*- coding: utf-8; mode: python -*-
 
 """General purpose workflow of tasks with dependencies.
 
@@ -1107,6 +1106,17 @@ class IOTask(Task):
     def RunWithIO(self, output, **inputs):
         raise Exception('Abstract method')
 
+    def should_task_run(self, task_run_id, output, **inputs):
+        """Determines whether the task should run even though a pre-existing output has been found.
+
+        Args:
+            task_run_id: ID of the task run.
+            output: Pre-existing output record for this task run.
+            **inputs: Requested input map.
+        Returns:
+            Whether the task should re-run.
+        """
+        return False
 
     def run(self):
         """Wires tasks outputs and inputs.
@@ -1130,6 +1140,12 @@ class IOTask(Task):
         logging.info('Processing task run ID: %r', task_run_id)
 
         output = self._read_task_run_trace(task_run_id)
+
+        if ((output is not None)
+            and self.should_task_run(task_run_id=task_run_id, output=output, **input_map)):
+            # Force re-running the task:
+            output = None
+
         if output is None:
             output = record.Record()
             task_state = self.run_with_io(output=output, **input_map)
